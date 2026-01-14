@@ -1,95 +1,52 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitor Tasas Vzla</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; background-color: #121212; color: white; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        h1 { margin-bottom: 5px; }
-        .subtitle { color: #888; margin-bottom: 20px; font-size: 0.9rem; }
-        
-        .card {
-            background: #1e1e1e;
-            width: 100%;
-            max-width: 350px;
-            padding: 20px;
-            margin-bottom: 15px;
-            border-radius: 15px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            text-align: center;
-            border: 1px solid #333;
-        }
-
-        .card-title { color: #aaa; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; }
-        .price { font-size: 2.2rem; font-weight: 700; margin: 10px 0; }
-        
-        .usd-color { color: #27ae60; } 
-        .eur-color { color: #3498db; } 
-        .usdt-color { color: #f1c40f; } 
-
-        button {
-            background: #007bff; color: white; border: none; padding: 12px 25px; 
-            border-radius: 50px; font-size: 1rem; cursor: pointer; margin-top: 10px;
-            transition: background 0.3s;
-        }
-        button:hover { background: #0056b3; }
-        button:disabled { background: #555; cursor: not-allowed; }
-    </style>
-</head>
-<body>
-
-    <h1>Tasas Hoy 🇻🇪</h1>
-    <span id="hora" class="subtitle">Esperando datos...</span>
-
-    <div class="card">
-        <div class="card-title">BCV Dólar</div>
-        <div id="bcv-usd" class="price usd-color">...</div>
-        <small>Banco Central</small>
-    </div>
-
-    <div class="card">
-        <div class="card-title">BCV Euro</div>
-        <div id="bcv-eur" class="price eur-color">...</div>
-        <small>Banco Central</small>
-    </div>
-
-    <div class="card" style="border-color: #f1c40f;">
-        <div class="card-title">Binance P2P (Promedio)</div>
-        <div id="binance" class="price usdt-color">...</div>
-        <small>USDT / PagoMóvil</small>
-    </div>
-
-    <button id="btn-update" onclick="obtenerDatos()">Actualizar</button>
+<button id="btn-update" onclick="obtenerDatos()">Actualizar</button>
 
     <script>
-        async function obtenerDatos() {
+        async function obtenerDatos(reintento = false) {
             const btn = document.getElementById('btn-update');
             const hora = document.getElementById('hora');
             
-            btn.disabled = true;
-            btn.innerText = "Cargando...";
-            hora.innerText = "Consultando...";
+            if (!reintento) {
+                btn.disabled = true;
+                btn.innerText = "Cargando...";
+                hora.innerText = "Consultando...";
+            }
 
             try {
-                // CAMBIO IMPORTANTE: Quitamos "http://localhost:3000"
-                // Ahora usamos una ruta relativa. Esto funciona en tu PC y en la Nube.
-                const res = await fetch('/api/tasas'); 
+                // Ponemos un timeout al fetch del frontend también (15 segundos)
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+                const res = await fetch('/api/tasas', { signal: controller.signal });
+                clearTimeout(timeoutId); // Limpiamos el contador si respondió a tiempo
+
+                if (!res.ok) throw new Error("Error del servidor");
+
                 const data = await res.json();
 
                 document.getElementById('bcv-usd').innerText = "Bs. " + data.bcv.usd;
                 document.getElementById('bcv-eur').innerText = "Bs. " + data.bcv.eur;
                 document.getElementById('binance').innerText = "Bs. " + data.binance;
                 hora.innerText = "Actualizado: " + data.fecha;
+                hora.style.color = "#888"; // Color normal
+
+                btn.disabled = false;
+                btn.innerText = "Actualizar";
 
             } catch (error) {
                 console.error(error);
-                alert("Error de conexión. Si estás en local, revisa la terminal.");
-                hora.innerText = "Error al cargar";
-            } finally {
-                btn.disabled = false;
-                btn.innerText = "Actualizar";
+                
+                // SI FALLA, LE MOSTRAMOS ESTO AL USUARIO
+                hora.innerText = "😴 Servidor despertando... (Reintentando)";
+                hora.style.color = "#e74c3c"; // Rojo para que se vea
+                
+                // Truco de SysAdmin: Si falla, esperamos 3 segundos y probamos una vez más automáticamente
+                if (!reintento) {
+                    setTimeout(() => obtenerDatos(true), 4000);
+                } else {
+                    hora.innerText = "⚠️ Servidor lento. Dale a 'Actualizar' en 30seg.";
+                    btn.disabled = false;
+                    btn.innerText = "Reintentar";
+                }
             }
         }
 
