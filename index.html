@@ -23,11 +23,40 @@
         }
 
         .card-title { color: #aaa; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; }
-        .price { font-size: 2.2rem; font-weight: 700; margin: 10px 0; }
+        .price { font-size: 2.2rem; font-weight: 700; margin: 5px 0; }
         
         .usd-color { color: #27ae60; } 
         .eur-color { color: #3498db; } 
         .usdt-color { color: #f1c40f; } 
+
+        /* --- ESTILOS DE LA CALCULADORA --- */
+        .calc-area {
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #333;
+        }
+        
+        .calc-input {
+            width: 70%;
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            background-color: #2c2c2c;
+            color: white;
+            text-align: center;
+            font-size: 1rem;
+            outline: none;
+        }
+        
+        .calc-input:focus { border-color: #007bff; }
+
+        .calc-result {
+            display: block;
+            margin-top: 8px;
+            color: #ccc;
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
 
         button {
             background: #007bff; color: white; border: none; padding: 12px 25px; 
@@ -46,30 +75,43 @@
     <div class="card">
         <div class="card-title">BCV Dólar</div>
         <div id="bcv-usd" class="price usd-color">...</div>
-        <small>Banco Central</small>
+        
+        <div class="calc-area">
+            <input type="number" class="calc-input" placeholder="Monto $" oninput="calcular('usd', this.value)">
+            <span id="res-usd" class="calc-result">Bs. 0.00</span>
+        </div>
     </div>
 
     <div class="card">
         <div class="card-title">BCV Euro</div>
         <div id="bcv-eur" class="price eur-color">...</div>
-        <small>Banco Central</small>
+
+        <div class="calc-area">
+            <input type="number" class="calc-input" placeholder="Monto €" oninput="calcular('eur', this.value)">
+            <span id="res-eur" class="calc-result">Bs. 0.00</span>
+        </div>
     </div>
 
     <div class="card" style="border-color: #f1c40f;">
         <div class="card-title">Binance P2P (Promedio)</div>
         <div id="binance" class="price usdt-color">...</div>
-        <small>USDT / PagoMóvil</small>
+        
+        <div class="calc-area">
+            <input type="number" class="calc-input" placeholder="Monto USDT" oninput="calcular('binance', this.value)">
+            <span id="res-binance" class="calc-result">Bs. 0.00</span>
+        </div>
     </div>
 
     <button id="btn-update" onclick="obtenerDatos()">Actualizar</button>
 
     <script>
+        // VARIABLE GLOBAL: Aquí guardaremos las tasas reales para usarlas en la calculadora
+        let tasasGlobales = { usd: 0, eur: 0, binance: 0 };
+
         async function obtenerDatos(reintento = false) {
             const btn = document.getElementById('btn-update');
             const hora = document.getElementById('hora');
             
-            // Solo mostramos "Cargando" visualmente si es el primer intento
-            // Si es un reintento automático, no bloqueamos el botón para no estresar al usuario
             if (!reintento) {
                 btn.disabled = true;
                 btn.innerText = "Cargando...";
@@ -78,44 +120,39 @@
             }
 
             try {
-                // Controller para matar la petición si tarda demasiado (Timeout de 15s)
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-                // Hacemos la petición
                 const res = await fetch('/api/tasas', { signal: controller.signal });
-                clearTimeout(timeoutId); // Si llega aquí, cancelamos el timeout
+                clearTimeout(timeoutId);
 
                 if (!res.ok) throw new Error("Error del servidor");
 
                 const data = await res.json();
 
-                // Actualizamos la pantalla con los datos
+                // 1. Mostrar precios en pantalla
                 document.getElementById('bcv-usd').innerText = "Bs. " + data.bcv.usd;
                 document.getElementById('bcv-eur').innerText = "Bs. " + data.bcv.eur;
                 document.getElementById('binance').innerText = "Bs. " + data.binance;
                 hora.innerText = "Actualizado: " + data.fecha;
                 hora.style.color = "#888"; 
 
-                // Restauramos el botón
+                // 2. GUARDAR EN MEMORIA (Importante para la calculadora)
+                tasasGlobales.usd = parseFloat(data.bcv.usd);
+                tasasGlobales.eur = parseFloat(data.bcv.eur);
+                tasasGlobales.binance = parseFloat(data.binance);
+
                 btn.disabled = false;
                 btn.innerText = "Actualizar";
 
             } catch (error) {
                 console.error(error);
-                
-                // --- LÓGICA DE REINTENTO ---
                 if (!reintento) {
-                    // Si falló la primera vez, asumimos que el servidor estaba dormido.
-                    hora.innerText = "😴 Servidor despertando... (Espere)";
-                    hora.style.color = "#e74c3c"; // Rojo
-                    
-                    // Probamos de nuevo automáticamente en 4 segundos
-                    console.log("Reintentando en 4 segundos...");
+                    hora.innerText = "😴 Servidor despertando...";
+                    hora.style.color = "#e74c3c";
                     setTimeout(() => obtenerDatos(true), 4000);
                 } else {
-                    // Si falló la segunda vez, ya es un error real.
-                    hora.innerText = "⚠️ Error de conexión. Intente luego.";
+                    hora.innerText = "⚠️ Error de conexión.";
                     hora.style.color = "#e74c3c";
                     btn.disabled = false;
                     btn.innerText = "Reintentar";
@@ -123,7 +160,23 @@
             }
         }
 
-        // Cargar al abrir la página
+        // --- FUNCIÓN DE LA CALCULADORA ---
+        function calcular(moneda, cantidad) {
+            // Si la cantidad está vacía, mostramos 0
+            if (!cantidad) {
+                document.getElementById('res-' + moneda).innerText = "Bs. 0.00";
+                return;
+            }
+
+            let tasa = tasasGlobales[moneda]; // Buscamos la tasa en nuestra memoria global
+            let total = parseFloat(cantidad) * tasa; // Multiplicamos
+
+            // Formateamos bonito con separadores de miles (ej: 1.200,50)
+            let totalBonito = total.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            
+            document.getElementById('res-' + moneda).innerText = "Bs. " + totalBonito;
+        }
+
         obtenerDatos();
     </script>
 </body>
