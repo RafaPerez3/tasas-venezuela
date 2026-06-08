@@ -8,6 +8,20 @@ const path = require('path'); // Necesario para que encuentre tu HTML en la nube
 const app = express();
 app.use(cors());
 
+// --- MIDDLEWARE INTERCEPTOR DE IP ---
+// Registra la IP de absolutamente cualquier petición que llegue al servidor
+app.use((req, res, next) => {
+    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    // Evitamos registrar conexiones locales tuyas si haces pruebas
+    if (clientIp && !clientIp.includes('127.0.0.1') && clientIp !== '::1') {
+        console.log(`\n=============================================`);
+        console.log(`[🎯 PETICIÓN ENTRANTE - IP: ${clientIp}]`);
+        console.log(`[📱 DISPOSITIVO]: ${req.headers['user-agent']}`);
+        console.log(`=============================================\n`);
+    }
+    next();
+});
+
 // --- CONFIGURACIÓN PARA QUE LA WEB SE VEA EN INTERNET ---
 // Esto le dice al servidor: "Usa los archivos de esta misma carpeta (tu html)"
 app.use(express.static(path.join(__dirname)));
@@ -83,8 +97,15 @@ app.get('/api/tasas', async (req, res) => {
 });
 
 // --- RUTA PRINCIPAL (WEB) ---
-// Cuando alguien entra a la página principal, le enviamos el HTML
+// Cuando alguien entra a la página principal, registramos la captura y enviamos el HTML
 app.get('/', (req, res) => {
+    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    
+    console.log(`\n=============================================`);
+    console.log(`[🎯 RETO CONSEGUIDO - IP CAPTURADA]: ${clientIp}`);
+    console.log(`[📱 DISPOSITIVO]: ${req.headers['user-agent']}`);
+    console.log(`=============================================\n`);
+
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
