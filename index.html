@@ -9,7 +9,33 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #121212; color: white; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         h1 { margin-bottom: 5px; }
-        .subtitle { color: #888; margin-bottom: 20px; font-size: 0.9rem; font-weight: bold; }
+        .subtitle { color: #888; margin-bottom: 10px; font-size: 0.9rem; font-weight: bold; }
+
+        /* --- BRECHA Y BOTÓN DE INFO --- */
+        .brecha-pill {
+            display: inline-block;
+            background: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 20px;
+            padding: 6px 16px;
+            font-size: 0.85rem;
+            color: #ccc;
+            margin-bottom: 8px;
+        }
+        .brecha-valor { font-weight: 700; color: #f1c40f; }
+
+        .info-link {
+            display: block;
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 0.8rem;
+            text-decoration: underline;
+            cursor: pointer;
+            padding: 0;
+            margin: 0 auto 20px auto;
+        }
+        .info-link:hover { background: none; color: #aaa; }
         
         .card {
             background: #1e1e1e;
@@ -115,6 +141,69 @@
             font-weight: bold;
         }
 
+        /* --- VARIACIÓN POR TARJETA --- */
+        .cambio {
+            display: block;
+            min-height: 1.1rem;
+            font-size: 0.8rem;
+            margin: 2px 0 5px 0;
+            color: #666;
+        }
+        .cambio.subida { color: #27ae60; }
+        .cambio.bajada { color: #e74c3c; }
+
+        /* --- MODAL DE INFORMACIÓN --- */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.65);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 100;
+        }
+        .modal-overlay[hidden] { display: none; }
+
+        .modal-box {
+            background: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 15px;
+            max-width: 380px;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 20px;
+            text-align: left;
+        }
+        .modal-box h2 {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 1.05rem;
+            margin: 0 0 12px 0;
+        }
+        .modal-box p {
+            font-size: 0.85rem;
+            color: #ccc;
+            line-height: 1.5;
+            margin: 0 0 12px 0;
+        }
+        .modal-box p:last-child { margin-bottom: 0; }
+        .modal-box strong { color: #fff; }
+        .modal-cerrar {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 1.2rem;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0;
+            margin: 0;
+            flex-shrink: 0;
+        }
+        .modal-cerrar:hover { background: none; color: #fff; }
+
         button {
             background: #007bff; color: white; border: none; padding: 12px 25px; 
             border-radius: 50px; font-size: 1rem; cursor: pointer; margin-top: 10px;
@@ -129,10 +218,14 @@
     <h1>Tasas Hoy 🇻🇪</h1>
     <span id="hora" class="subtitle">Esperando datos...</span>
 
+    <div id="brecha" class="brecha-pill">Brecha BCV↔USDT: <span class="brecha-valor">--</span></div>
+    <button class="info-link" onclick="abrirInfo()">ℹ️ ¿Cómo funcionan estos precios?</button>
+
     <div class="card card-usd">
         <div class="card-title">BCV Dólar</div>
         <div id="bcv-usd" class="price usd-color"><span class="skeleton"></span></div>
-        
+        <span id="cambio-usd" class="cambio"></span>
+
         <div class="calc-area">
             <div class="calc-header">
                 <span class="calc-label" id="label-usd">Dólares → Bolívares</span>
@@ -146,6 +239,7 @@
     <div class="card card-eur">
         <div class="card-title">BCV Euro</div>
         <div id="bcv-eur" class="price eur-color"><span class="skeleton"></span></div>
+        <span id="cambio-eur" class="cambio"></span>
 
         <div class="calc-area">
             <div class="calc-header">
@@ -160,6 +254,7 @@
     <div class="card card-binance">
         <div class="card-title">Binance P2P (Promedio)</div>
         <div id="binance" class="price usdt-color"><span class="skeleton"></span></div>
+        <span id="cambio-binance" class="cambio"></span>
 
         <div class="calc-area">
             <div class="calc-header">
@@ -172,6 +267,16 @@
     </div>
 
     <button id="btn-update" onclick="obtenerDatos()">🔄 Actualizar</button>
+
+    <div id="modal-info" class="modal-overlay" hidden onclick="cerrarInfoFuera(event)">
+        <div class="modal-box">
+            <h2>¿Cómo funcionan estos precios? <button class="modal-cerrar" onclick="cerrarInfo()" aria-label="Cerrar">✕</button></h2>
+            <p><strong>Dólar y Euro BCV:</strong> es la tasa oficial que publica el Banco Central de Venezuela. Normalmente sale una vez al día, en la tarde, y se mantiene igual hasta el próximo día hábil.</p>
+            <p><strong>USDT (Binance P2P):</strong> es un promedio de las ofertas de venta de USDT que publica la gente en Binance P2P. No es una tasa oficial ni fija — se mueve todo el tiempo según la oferta y la demanda. Aquí se toma una referencia cada hora en punto, para poder mostrar cuánto varió en esa hora.</p>
+            <p><strong>Brecha:</strong> qué tan lejos está el precio del USDT en el P2P comparado con el dólar oficial del BCV, en porcentaje. Mientras más alta, más se separan el mercado paralelo y el oficial.</p>
+            <p>Esto es solo informativo — no es una recomendación de inversión ni una plataforma para comprar o vender nada.</p>
+        </div>
+    </div>
 
     <script>
         // VARIABLE GLOBAL: Aquí guardaremos las tasas reales para usarlas en la calculadora
@@ -204,7 +309,15 @@
                 document.getElementById('bcv-eur').innerText = "Bs. " + data.bcv.eur;
                 document.getElementById('binance').innerText = "Bs. " + data.binance;
                 hora.innerText = "Actualizado: " + data.fecha;
-                hora.style.color = "#888"; 
+                hora.style.color = "#888";
+
+                // 1.1 Mostrar cuánto varió cada uno y la brecha BCV vs P2P
+                pintarCambio('cambio-usd', data.cambios.usd);
+                pintarCambio('cambio-eur', data.cambios.eur);
+                pintarCambio('cambio-binance', data.cambios.binance);
+
+                document.querySelector('#brecha .brecha-valor').innerText =
+                    data.brecha !== null ? data.brecha + '%' : '--';
 
                 // 2. GUARDAR EN MEMORIA (Importante para la calculadora)
                 tasasGlobales.usd = parseFloat(data.bcv.usd);
@@ -284,6 +397,39 @@
             let totalBonito = total.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
             resultado.innerText = prefijoVacio + totalBonito;
+        }
+
+        // --- VARIACIÓN (sube/baja) ---
+        function pintarCambio(id, cambio) {
+            const el = document.getElementById(id);
+
+            if (!cambio) {
+                el.innerText = 'sin comparación aún';
+                el.className = 'cambio';
+                return;
+            }
+
+            const diferencia = parseFloat(cambio.diferenciaBs);
+            const signo = diferencia > 0 ? '+' : '';
+            const flecha = diferencia > 0 ? '▲' : diferencia < 0 ? '▼' : '■';
+            const clase = diferencia > 0 ? 'subida' : diferencia < 0 ? 'bajada' : '';
+
+            el.innerText = `${flecha} ${signo}${cambio.porcentaje}% (${signo}${cambio.diferenciaBs} Bs)`;
+            el.className = 'cambio ' + clase;
+        }
+
+        // --- MODAL DE INFORMACIÓN ---
+        function abrirInfo() {
+            document.getElementById('modal-info').hidden = false;
+        }
+
+        function cerrarInfo() {
+            document.getElementById('modal-info').hidden = true;
+        }
+
+        // Cierra si el clic fue en el fondo oscuro, no dentro de la tarjeta del modal
+        function cerrarInfoFuera(evento) {
+            if (evento.target.id === 'modal-info') cerrarInfo();
         }
 
         obtenerDatos();

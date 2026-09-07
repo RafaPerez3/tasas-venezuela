@@ -5,6 +5,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const cors = require('cors');
 const https = require('https');
+const fs = require('fs');
 const path = require('path'); // Necesario para que encuentre tu HTML en la nube
 
 const app = express();
@@ -109,6 +110,97 @@ async function getBCVRates() {
     }
 }
 
+// --- HISTORIAL (para saber cuánto subió o bajó) ---
+// Guardamos el último valor "confirmado" de cada tasa y el que tenía justo antes,
+// para poder mostrar la variación. Se guarda en un archivo local: si Render
+// reinicia el servicio se pierde y se reconstruye solo con las próximas horas.
+const RUTA_HISTORIAL = path.join(__dirname, 'historial.json');
+
+let historial = {
+    bcv: { usd: null, eur: null },           // último valor BCV visto
+    bcvAnterior: { usd: null, eur: null },   // el que tenía antes de cambiar (se actualiza 1 vez al día)
+    binance: { valor: null, hora: null },    // valor de USDT de la hora en curso
+    binanceAnterior: { valor: null, hora: null } // valor de la hora anterior
+};
+
+function cargarHistorial() {
+    try {
+        if (fs.existsSync(RUTA_HISTORIAL)) {
+            historial = { ...historial, ...JSON.parse(fs.readFileSync(RUTA_HISTORIAL, 'utf8')) };
+            console.log('[Historial] Cargado desde disco.');
+        }
+    } catch (error) {
+        console.error('[Historial] No se pudo leer, se empieza de cero:', error.message);
+    }
+}
+
+function guardarHistorial() {
+    try {
+        fs.writeFileSync(RUTA_HISTORIAL, JSON.stringify(historial, null, 2));
+    } catch (error) {
+        console.error('[Historial] No se pudo guardar:', error.message);
+    }
+}
+
+function horaActualCaracas() {
+    // Devuelve 0-23 en hora de Venezuela, sin depender de en qué zona horaria esté Render
+    return parseInt(
+        new Date().toLocaleString('en-US', { timeZone: 'America/Caracas', hour: '2-digit', hour12: false }),
+        10
+    );
+}
+
+// Se corre sola cada pocos minutos: detecta cuándo cambia el BCV (una vez al día)
+// y cuándo cambia la hora (para la foto del USDT), y va rotando anterior/actual.
+async function actualizarHistorial() {
+    const [binanceNuevo, bcvNuevo] = await Promise.all([getBinanceRate(), getBCVRates()]);
+
+    if (bcvNuevo.usd !== "0.00") {
+        const yaHabiaValor = historial.bcv.usd !== null;
+        const cambioDeValor = yaHabiaValor && historial.bcv.usd !== bcvNuevo.usd;
+        if (cambioDeValor) {
+            historial.bcvAnterior = { usd: historial.bcv.usd, eur: historial.bcv.eur };
+        }
+        historial.bcv = { usd: bcvNuevo.usd, eur: bcvNuevo.eur };
+    }
+
+    if (binanceNuevo !== "0.00") {
+        const horaActual = horaActualCaracas();
+        if (historial.binance.hora !== horaActual) {
+            // Cambiamos de hora: lo que teníamos como "actual" pasa a ser "de la hora anterior"
+            if (historial.binance.valor !== null) {
+                historial.binanceAnterior = { valor: historial.binance.valor, hora: historial.binance.hora };
+            }
+            historial.binance = { valor: binanceNuevo, hora: horaActual };
+        } else {
+            // Seguimos en la misma hora: solo refrescamos el valor "en curso"
+            historial.binance.valor = binanceNuevo;
+        }
+    }
+
+    guardarHistorial();
+}
+
+// Compara un valor actual contra uno anterior y devuelve la diferencia en Bs y en %.
+// Devuelve null si todavía no hay con qué comparar (recién arrancó el servidor).
+function calcularCambio(actual, anterior) {
+    const actualNum = parseFloat(actual);
+    const anteriorNum = parseFloat(anterior);
+    if (!actualNum || !anteriorNum) return null;
+
+    const diferenciaBs = actualNum - anteriorNum;
+    const porcentaje = (diferenciaBs / anteriorNum) * 100;
+    return { diferenciaBs: diferenciaBs.toFixed(2), porcentaje: porcentaje.toFixed(2) };
+}
+
+// La "brecha" es cuánto más caro está el USDT del P2P frente al dólar oficial del BCV.
+function calcularBrecha(usd, usdt) {
+    const usdNum = parseFloat(usd);
+    const usdtNum = parseFloat(usdt);
+    if (!usdNum || !usdtNum) return null;
+    return (((usdtNum - usdNum) / usdNum) * 100).toFixed(2);
+}
+
 // --- RUTA API (DATOS) ---
 app.get('/api/tasas', async (req, res) => {
     // Ejecutamos las dos consultas a la vez para que sea rápido
@@ -117,7 +209,13 @@ app.get('/api/tasas', async (req, res) => {
     res.json({
         fecha: new Date().toLocaleString('es-VE', { timeZone: 'America/Caracas' }),
         bcv,
-        binance
+        binance,
+        brecha: calcularBrecha(bcv.usd, binance),
+        cambios: {
+            usd: calcularCambio(bcv.usd, historial.bcvAnterior.usd),
+            eur: calcularCambio(bcv.eur, historial.bcvAnterior.eur),
+            binance: calcularCambio(binance, historial.binanceAnterior.valor)
+        }
     });
 });
 
@@ -156,4 +254,10 @@ app.use(express.static(path.join(__dirname)));
 // process.env.PORT es el puerto que nos asignará la nube (Render)
 // 3000 es el puerto si lo usas en tu PC local
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Servidor listo en puerto ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`🚀 Servidor listo en puerto ${PORT}`);
+
+    cargarHistorial();
+    actualizarHistorial(); // primera lectura al arrancar, no esperamos 5 minutos
+    setInterval(actualizarHistorial, 5 * 60 * 1000); // cada 5 minutos revisa si cambió la hora o el BCV
+});
