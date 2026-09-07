@@ -123,6 +123,12 @@ let historial = {
     binanceAnterior: { valor: null, hora: null } // valor de la hora anterior
 };
 
+// Semilla de arranque: precios BCV del lunes 07/09/2026, para tener con qué
+// comparar desde ya en vez de esperar hasta el próximo cambio del BCV.
+// Solo se usa si todavía no hay un "anterior" real guardado; en cuanto el BCV
+// cambie de valor una vez, esto queda reemplazado para siempre por el dato real.
+const SEMILLA_BCV_ANTERIOR = { usd: '813.74', eur: '945.65' };
+
 function cargarHistorial() {
     try {
         if (fs.existsSync(RUTA_HISTORIAL)) {
@@ -131,6 +137,11 @@ function cargarHistorial() {
         }
     } catch (error) {
         console.error('[Historial] No se pudo leer, se empieza de cero:', error.message);
+    }
+
+    if (historial.bcvAnterior.usd === null) {
+        historial.bcvAnterior = { ...SEMILLA_BCV_ANTERIOR };
+        console.log('[Historial] Sin comparación previa, se usa la semilla del lunes.');
     }
 }
 
