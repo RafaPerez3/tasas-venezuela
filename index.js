@@ -32,10 +32,6 @@ async function notificarTelegram(mensaje) {
     }
 }
 
-// --- CONFIGURACIÓN PARA QUE LA WEB SE VEA EN INTERNET ---
-// Esto le dice al servidor: "Usa los archivos de esta misma carpeta (tu html)"
-app.use(express.static(path.join(__dirname)));
-
 // --- AGENTE PARA EL BCV ---
 // Evita que el servidor se queje por los certificados de seguridad del banco
 const agent = new https.Agent({ rejectUnauthorized: false });
@@ -124,6 +120,12 @@ app.get('/', (req, res) => {
 
     res.sendFile(path.join(__dirname, 'index.html'));
 });
+
+// --- ARCHIVOS ESTÁTICOS ---
+// Va DESPUÉS de la ruta '/' a propósito: si fuera antes, express.static
+// serviría index.html automáticamente en '/' y nunca pasaría por el
+// aviso de Telegram de arriba. Aquí solo queda para otros archivos sueltos.
+app.use(express.static(path.join(__dirname)));
 
 // --- ARRANCAR SERVIDOR ---
 // process.env.PORT es el puerto que nos asignará la nube (Render)
