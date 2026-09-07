@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monitor Tasas Vzla</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5MDAgNjAwIj48ZGVmcz48cGF0aCBpZD0iZSIgZD0iTSAwLC0xMCBMIDIuOSwtNCBMIDkuNSwtMy4xIEwgNC43LDEuOSBMIDUuOSw4LjUgTCAwLDUgTCAtNS45LDguNSBMIC00LjcsMS45IEwgLTkuNSwtMy4xIEwgLTIuOSwtNCBaIiBmaWxsPSIjZmZmIi8+PC9kZWZzPjxyZWN0IHdpZHRoPSI5MDAiIGhlaWdodD0iMjAwIiB5PSIwIiBmaWxsPSIjRkZDQzAwIi8+PHJlY3Qgd2lkdGg9IjkwMCIgaGVpZ2h0PSIyMDAiIHk9IjIwMCIgZmlsbD0iIzAwMjQ3RCIvPjxyZWN0IHdpZHRoPSI5MDAiIGhlaWdodD0iMjAwIiB5PSI0MDAiIGZpbGw9IiNDRTExMjYiLz48dXNlIGhyZWY9IiNlIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgzMDIuOCwzOTUpIHNjYWxlKDEuOCkiLz48dXNlIGhyZWY9IiNlIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgzMzQuNCwzNTUuNCkgc2NhbGUoMS44KSIvPjx1c2UgaHJlZj0iI2UiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDM3Ni4yLDMyNi44KSBzY2FsZSgxLjgpIi8+PHVzZSBocmVmPSIjZSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNDI0LjcsMzExLjkpIHNjYWxlKDEuOCkiLz48dXNlIGhyZWY9IiNlIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSg0NzUuMywzMTEuOSkgc2NhbGUoMS44KSIvPjx1c2UgaHJlZj0iI2UiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDUyMy44LDMyNi44KSBzY2FsZSgxLjgpIi8+PHVzZSBocmVmPSIjZSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNTY1LjYsMzU1LjQpIHNjYWxlKDEuOCkiLz48dXNlIGhyZWY9IiNlIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSg1OTcuMiwzOTUpIHNjYWxlKDEuOCkiLz48L3N2Zz4=">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #121212; color: white; padding: 20px; display: flex; flex-direction: column; align-items: center; }
@@ -22,12 +23,33 @@
             border: 1px solid #333;
         }
 
+        .card-usd { border-color: #27ae60; }
+        .card-eur { border-color: #3498db; }
+        .card-binance { border-color: #f1c40f; }
+
         .card-title { color: #aaa; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; }
         .price { font-size: 2.2rem; font-weight: 700; margin: 5px 0; }
-        
-        .usd-color { color: #27ae60; } 
-        .eur-color { color: #3498db; } 
-        .usdt-color { color: #f1c40f; } 
+
+        .usd-color { color: #27ae60; }
+        .eur-color { color: #3498db; }
+        .usdt-color { color: #f1c40f; }
+
+        /* --- SKELETON DE CARGA --- */
+        .skeleton {
+            display: inline-block;
+            width: 130px;
+            max-width: 60%;
+            height: 1.7rem;
+            border-radius: 6px;
+            background: linear-gradient(90deg, #2a2a2a 25%, #3a3a3a 50%, #2a2a2a 75%);
+            background-size: 200% 100%;
+            animation: brillo 1.4s infinite;
+            vertical-align: middle;
+        }
+        @keyframes brillo {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
 
         /* --- ESTILOS DE LA CALCULADORA --- */
         .calc-area {
@@ -79,9 +101,9 @@
     <h1>Tasas Hoy 🇻🇪</h1>
     <span id="hora" class="subtitle">Esperando datos...</span>
 
-    <div class="card">
+    <div class="card card-usd">
         <div class="card-title">BCV Dólar</div>
-        <div id="bcv-usd" class="price usd-color">...</div>
+        <div id="bcv-usd" class="price usd-color"><span class="skeleton"></span></div>
         
         <div class="calc-area">
             <span class="calc-label">Dólares → Bolívares</span>
@@ -96,9 +118,9 @@
         </div>
     </div>
 
-    <div class="card">
+    <div class="card card-eur">
         <div class="card-title">BCV Euro</div>
-        <div id="bcv-eur" class="price eur-color">...</div>
+        <div id="bcv-eur" class="price eur-color"><span class="skeleton"></span></div>
 
         <div class="calc-area">
             <span class="calc-label">Euros → Bolívares</span>
@@ -113,9 +135,9 @@
         </div>
     </div>
 
-    <div class="card" style="border-color: #f1c40f;">
+    <div class="card card-binance">
         <div class="card-title">Binance P2P (Promedio)</div>
-        <div id="binance" class="price usdt-color">...</div>
+        <div id="binance" class="price usdt-color"><span class="skeleton"></span></div>
 
         <div class="calc-area">
             <span class="calc-label">USDT → Bolívares</span>
@@ -130,7 +152,7 @@
         </div>
     </div>
 
-    <button id="btn-update" onclick="obtenerDatos()">Actualizar</button>
+    <button id="btn-update" onclick="obtenerDatos()">🔄 Actualizar</button>
 
     <script>
         // VARIABLE GLOBAL: Aquí guardaremos las tasas reales para usarlas en la calculadora
@@ -142,7 +164,7 @@
             
             if (!reintento) {
                 btn.disabled = true;
-                btn.innerText = "Cargando...";
+                btn.innerText = "⏳ Cargando...";
                 hora.innerText = "Consultando...";
                 hora.style.color = "#888";
             }
@@ -171,7 +193,7 @@
                 tasasGlobales.binance = parseFloat(data.binance);
 
                 btn.disabled = false;
-                btn.innerText = "Actualizar";
+                btn.innerText = "🔄 Actualizar";
 
             } catch (error) {
                 console.error(error);
@@ -183,7 +205,7 @@
                     hora.innerText = "⚠️ Error de conexión.";
                     hora.style.color = "#e74c3c";
                     btn.disabled = false;
-                    btn.innerText = "Reintentar";
+                    btn.innerText = "🔁 Reintentar";
                 }
             }
         }
