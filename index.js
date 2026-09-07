@@ -1,3 +1,5 @@
+require('dotenv').config(); // Carga TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID desde .env en local
+
 const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
@@ -8,19 +10,27 @@ const path = require('path'); // Necesario para que encuentre tu HTML en la nube
 const app = express();
 app.use(cors());
 
-// --- MIDDLEWARE INTERCEPTOR DE IP ---
-// Registra la IP de absolutamente cualquier petición que llegue al servidor
-app.use((req, res, next) => {
-    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    // Evitamos registrar conexiones locales tuyas si haces pruebas
-    if (clientIp && !clientIp.includes('127.0.0.1') && clientIp !== '::1') {
-        console.log(`\n=============================================`);
-        console.log(`[🎯 PETICIÓN ENTRANTE - IP: ${clientIp}]`);
-        console.log(`[📱 DISPOSITIVO]: ${req.headers['user-agent']}`);
-        console.log(`=============================================\n`);
+// --- AVISO POR TELEGRAM ---
+// Manda un mensaje a tu Telegram cada vez que alguien abre la página.
+// El token y el chat_id se leen de variables de entorno: nunca deben quedar
+// escritos en este archivo porque el repo es público en GitHub.
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+
+async function notificarTelegram(mensaje) {
+    if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+        console.log('[Telegram] Falta TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID, no se envía aviso.');
+        return;
     }
-    next();
-});
+    try {
+        await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            chat_id: TELEGRAM_CHAT_ID,
+            text: mensaje
+        });
+    } catch (error) {
+        console.error('[Telegram] Error al enviar el aviso:', error.message);
+    }
+}
 
 // --- CONFIGURACIÓN PARA QUE LA WEB SE VEA EN INTERNET ---
 // Esto le dice al servidor: "Usa los archivos de esta misma carpeta (tu html)"
@@ -97,14 +107,20 @@ app.get('/api/tasas', async (req, res) => {
 });
 
 // --- RUTA PRINCIPAL (WEB) ---
-// Cuando alguien entra a la página principal, registramos la captura y enviamos el HTML
+// Cuando alguien entra a la página principal, avisamos por Telegram y enviamos el HTML.
 app.get('/', (req, res) => {
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    
-    console.log(`\n=============================================`);
-    console.log(`[🎯 RETO CONSEGUIDO - IP CAPTURADA]: ${clientIp}`);
-    console.log(`[📱 DISPOSITIVO]: ${req.headers['user-agent']}`);
-    console.log(`=============================================\n`);
+    const userAgent = req.headers['user-agent'] || '';
+    const fecha = new Date().toLocaleString('es-VE', { timeZone: 'America/Caracas' });
+
+    // El ping de UptimeRobot (que mantiene el servidor despierto) también entra
+    // por aquí cada pocos minutos: lo filtramos para no llenar el Telegram de avisos falsos.
+    const esMonitor = /uptimerobot/i.test(userAgent);
+
+    console.log(`[Visita${esMonitor ? ' - monitor' : ''}] ${fecha} - IP: ${clientIp}`);
+    if (!esMonitor) {
+        notificarTelegram(`📡 Alguien abrió Tasas Hoy\n🕒 ${fecha}\n🌐 IP: ${clientIp}`);
+    }
 
     res.sendFile(path.join(__dirname, 'index.html'));
 });
