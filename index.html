@@ -72,12 +72,40 @@
         
         .calc-input:focus { border-color: #007bff; }
 
+        .calc-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
         .calc-label {
-            display: block;
             font-size: 0.7rem;
             color: #777;
-            margin-bottom: 4px;
         }
+
+        .swap-btn {
+            background: #2c2c2c;
+            border: 1px solid #444;
+            color: #ccc;
+            width: 22px;
+            height: 22px;
+            padding: 0;
+            margin: 0;
+            border-radius: 50%;
+            font-size: 0.85rem;
+            line-height: 1;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: background 0.2s, transform 0.2s;
+        }
+
+        .swap-btn:hover { background: #3a3a3a; }
+        .swap-btn:active { transform: rotate(180deg); }
 
         .calc-result {
             display: block;
@@ -106,15 +134,12 @@
         <div id="bcv-usd" class="price usd-color"><span class="skeleton"></span></div>
         
         <div class="calc-area">
-            <span class="calc-label">Dólares → Bolívares</span>
-            <input type="number" class="calc-input" placeholder="Monto $" oninput="calcular('usd', this.value)">
+            <div class="calc-header">
+                <span class="calc-label" id="label-usd">Dólares → Bolívares</span>
+                <button class="swap-btn" onclick="invertir('usd')" title="Invertir conversión" aria-label="Invertir conversión">⇄</button>
+            </div>
+            <input type="number" class="calc-input" id="input-usd" placeholder="Monto $" oninput="calcular('usd', this.value)">
             <span id="res-usd" class="calc-result">Bs. 0.00</span>
-        </div>
-
-        <div class="calc-area">
-            <span class="calc-label">Bolívares → Dólares</span>
-            <input type="number" class="calc-input" placeholder="Monto Bs" oninput="calcularInverso('usd', this.value)">
-            <span id="res-usd-inv" class="calc-result">$ 0.00</span>
         </div>
     </div>
 
@@ -123,15 +148,12 @@
         <div id="bcv-eur" class="price eur-color"><span class="skeleton"></span></div>
 
         <div class="calc-area">
-            <span class="calc-label">Euros → Bolívares</span>
-            <input type="number" class="calc-input" placeholder="Monto €" oninput="calcular('eur', this.value)">
+            <div class="calc-header">
+                <span class="calc-label" id="label-eur">Euros → Bolívares</span>
+                <button class="swap-btn" onclick="invertir('eur')" title="Invertir conversión" aria-label="Invertir conversión">⇄</button>
+            </div>
+            <input type="number" class="calc-input" id="input-eur" placeholder="Monto €" oninput="calcular('eur', this.value)">
             <span id="res-eur" class="calc-result">Bs. 0.00</span>
-        </div>
-
-        <div class="calc-area">
-            <span class="calc-label">Bolívares → Euros</span>
-            <input type="number" class="calc-input" placeholder="Monto Bs" oninput="calcularInverso('eur', this.value)">
-            <span id="res-eur-inv" class="calc-result">€ 0.00</span>
         </div>
     </div>
 
@@ -140,15 +162,12 @@
         <div id="binance" class="price usdt-color"><span class="skeleton"></span></div>
 
         <div class="calc-area">
-            <span class="calc-label">USDT → Bolívares</span>
-            <input type="number" class="calc-input" placeholder="Monto USDT" oninput="calcular('binance', this.value)">
+            <div class="calc-header">
+                <span class="calc-label" id="label-binance">USDT → Bolívares</span>
+                <button class="swap-btn" onclick="invertir('binance')" title="Invertir conversión" aria-label="Invertir conversión">⇄</button>
+            </div>
+            <input type="number" class="calc-input" id="input-binance" placeholder="Monto USDT" oninput="calcular('binance', this.value)">
             <span id="res-binance" class="calc-result">Bs. 0.00</span>
-        </div>
-
-        <div class="calc-area">
-            <span class="calc-label">Bolívares → USDT</span>
-            <input type="number" class="calc-input" placeholder="Monto Bs" oninput="calcularInverso('binance', this.value)">
-            <span id="res-binance-inv" class="calc-result">USDT 0.00</span>
         </div>
     </div>
 
@@ -210,49 +229,61 @@
             }
         }
 
-        // --- FUNCIÓN DE LA CALCULADORA ---
+        // --- CALCULADORA CON DIRECCIÓN INVERTIBLE ---
+        // Info fija de cada tarjeta: cómo se llama la moneda, su símbolo y el placeholder del input.
+        const infoMoneda = {
+            usd: { nombre: 'Dólares', simbolo: '$ ', placeholder: 'Monto $' },
+            eur: { nombre: 'Euros', simbolo: '€ ', placeholder: 'Monto €' },
+            binance: { nombre: 'USDT', simbolo: 'USDT ', placeholder: 'Monto USDT' }
+        };
+
+        // 'directa' = moneda -> Bs (multiplica). 'inversa' = Bs -> moneda (divide).
+        let direcciones = { usd: 'directa', eur: 'directa', binance: 'directa' };
+
+        function invertir(moneda) {
+            direcciones[moneda] = direcciones[moneda] === 'directa' ? 'inversa' : 'directa';
+
+            const info = infoMoneda[moneda];
+            const input = document.getElementById('input-' + moneda);
+            const label = document.getElementById('label-' + moneda);
+
+            if (direcciones[moneda] === 'directa') {
+                label.innerText = `${info.nombre} → Bolívares`;
+                input.placeholder = info.placeholder;
+            } else {
+                label.innerText = `Bolívares → ${info.nombre}`;
+                input.placeholder = 'Monto Bs';
+            }
+
+            // Al invertir, limpiamos el campo para no confundir con el número anterior
+            input.value = '';
+            calcular(moneda, '');
+        }
+
         function calcular(moneda, cantidad) {
+            const resultado = document.getElementById('res-' + moneda);
+            const esDirecta = direcciones[moneda] === 'directa';
+            const prefijoVacio = esDirecta ? 'Bs. ' : infoMoneda[moneda].simbolo;
+
             // Si la cantidad está vacía, mostramos 0
             if (!cantidad) {
-                document.getElementById('res-' + moneda).innerText = "Bs. 0.00";
+                resultado.innerText = prefijoVacio + "0.00";
                 return;
             }
 
             let tasa = tasasGlobales[moneda]; // Buscamos la tasa en nuestra memoria global
-            let total = parseFloat(cantidad) * tasa; // Multiplicamos
-
-            // Formateamos bonito con separadores de miles (ej: 1.200,50)
-            let totalBonito = total.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-            document.getElementById('res-' + moneda).innerText = "Bs. " + totalBonito;
-        }
-
-        // --- CALCULADORA INVERSA: BOLÍVARES -> MONEDA ---
-        function simboloMoneda(moneda) {
-            if (moneda === 'usd') return '$ ';
-            if (moneda === 'eur') return '€ ';
-            if (moneda === 'binance') return 'USDT ';
-            return '';
-        }
-
-        function calcularInverso(moneda, cantidadBs) {
-            const resultado = document.getElementById('res-' + moneda + '-inv');
-
-            if (!cantidadBs) {
-                resultado.innerText = simboloMoneda(moneda) + "0.00";
-                return;
-            }
-
-            let tasa = tasasGlobales[moneda];
             if (!tasa) {
                 resultado.innerText = "Esperando tasa...";
                 return;
             }
 
-            let total = parseFloat(cantidadBs) / tasa; // Dividimos, al revés que calcular()
+            // Directa: moneda -> Bs (multiplica). Inversa: Bs -> moneda (divide).
+            let total = esDirecta ? parseFloat(cantidad) * tasa : parseFloat(cantidad) / tasa;
+
+            // Formateamos bonito con separadores de miles (ej: 1.200,50)
             let totalBonito = total.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-            resultado.innerText = simboloMoneda(moneda) + totalBonito;
+            resultado.innerText = prefijoVacio + totalBonito;
         }
 
         obtenerDatos();
