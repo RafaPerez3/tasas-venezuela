@@ -32,6 +32,25 @@ async function notificarTelegram(mensaje) {
     }
 }
 
+// --- UBICACIÓN APROXIMADA POR IP ---
+// Usa un servicio gratuito de geolocalización (ciudad/región/país, no exacta).
+// Las IPs privadas (de la propia red de Render, o pruebas locales) no se pueden geolocalizar.
+function esIpPrivada(ip) {
+    return !ip || ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('127.') || ip === '::1';
+}
+
+async function obtenerUbicacion(ip) {
+    if (esIpPrivada(ip)) return null;
+    try {
+        const { data } = await axios.get(`https://freeipapi.com/api/json/${ip}`, { timeout: 5000 });
+        const partes = [data.cityName, data.regionName, data.countryName].filter(Boolean);
+        return partes.length ? partes.join(', ') : null;
+    } catch (error) {
+        console.error('[Ubicación] No se pudo geolocalizar la IP:', error.message);
+        return null;
+    }
+}
+
 // --- AGENTE PARA EL BCV ---
 // Evita que el servidor se queje por los certificados de seguridad del banco
 const agent = new https.Agent({ rejectUnauthorized: false });
@@ -105,7 +124,10 @@ app.get('/api/tasas', async (req, res) => {
 // --- RUTA PRINCIPAL (WEB) ---
 // Cuando alguien entra a la página principal, avisamos por Telegram y enviamos el HTML.
 app.get('/', (req, res) => {
-    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    // x-forwarded-for trae varias IPs separadas por coma (cliente, Cloudflare, red interna
+    // de Render); la primera es la real, el resto son saltos de infraestructura.
+    const ipCompleta = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+    const clientIp = ipCompleta.split(',')[0].trim();
     const userAgent = req.headers['user-agent'] || '';
     const fecha = new Date().toLocaleString('es-VE', { timeZone: 'America/Caracas' });
 
@@ -115,7 +137,10 @@ app.get('/', (req, res) => {
 
     console.log(`[Visita${esMonitor ? ' - monitor' : ''}] ${fecha} - IP: ${clientIp}`);
     if (!esMonitor) {
-        notificarTelegram(`📡 Alguien abrió Tasas Hoy\n🕒 ${fecha}\n🌐 IP: ${clientIp}`);
+        obtenerUbicacion(clientIp).then(ubicacion => {
+            const lineaUbicacion = ubicacion ? `\n📍 ${ubicacion}` : '';
+            notificarTelegram(`📡 Alguien abrió Tasas Hoy\n🕒 ${fecha}\n🌐 IP: ${clientIp}${lineaUbicacion}`);
+        });
     }
 
     res.sendFile(path.join(__dirname, 'index.html'));
