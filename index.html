@@ -12,6 +12,14 @@
         .subtitle { color: #888; margin-bottom: 10px; font-size: 0.9rem; font-weight: bold; }
 
         /* --- BRECHA Y BOTÓN DE INFO --- */
+        .brecha-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
         .brecha-pill {
             display: inline-block;
             background: #1e1e1e;
@@ -20,23 +28,27 @@
             padding: 6px 16px;
             font-size: 0.85rem;
             color: #ccc;
-            margin-bottom: 8px;
         }
         .brecha-valor { font-weight: 700; color: #f1c40f; }
 
-        .info-link {
-            display: block;
-            background: none;
-            border: none;
-            color: #888;
-            font-size: 0.8rem;
-            text-decoration: underline;
-            cursor: pointer;
+        .info-icon-btn {
+            background: #1e1e1e;
+            border: 1px solid #333;
+            color: #ccc;
+            width: 28px;
+            height: 28px;
             padding: 0;
-            margin: 0 auto 20px auto;
+            margin: 0;
+            border-radius: 50%;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         }
-        .info-link:hover { background: none; color: #aaa; }
-        
+        .info-icon-btn:hover { background: #2a2a2a; }
+
         .card {
             background: #1e1e1e;
             width: 100%;
@@ -54,7 +66,7 @@
         .card-binance { border-color: #f1c40f; }
 
         .card-title { color: #aaa; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; }
-        .price { font-size: 2.2rem; font-weight: 700; margin: 5px 0; }
+        .price { font-size: 1.7rem; font-weight: 700; margin: 5px 0; }
 
         .usd-color { color: #27ae60; }
         .eur-color { color: #3498db; }
@@ -218,8 +230,10 @@
     <h1>Tasas Hoy 🇻🇪</h1>
     <span id="hora" class="subtitle">Esperando datos...</span>
 
-    <div id="brecha" class="brecha-pill">Brecha BCV↔USDT: <span class="brecha-valor">--</span></div>
-    <button class="info-link" onclick="abrirInfo()">ℹ️ ¿Cómo funcionan estos precios?</button>
+    <div class="brecha-row">
+        <div id="brecha" class="brecha-pill">Brecha BCV↔USDT: <span class="brecha-valor">--</span></div>
+        <button class="info-icon-btn" onclick="abrirInfo()" title="¿Cómo funcionan estos precios?" aria-label="¿Cómo funcionan estos precios?">ℹ️</button>
+    </div>
 
     <div class="card card-usd">
         <div class="card-title">BCV Dólar</div>
