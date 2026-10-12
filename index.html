@@ -726,6 +726,8 @@
                     caja.innerHTML = `<span class="hist-fecha">${intro}</span>${valores}`;
                 } else if (d.futura) {
                     caja.textContent = `Todavía no hay tasa para esa fecha. La última publicada rige para el ${formatearFecha(d.ultima, true)}.`;
+                } else if (d.hueco) {
+                    caja.textContent = `No tengo datos de esa fecha. La tasa anterior más cercana es la del ${formatearFecha(d.cercana, true)}.`;
                 } else if (d.primera) {
                     caja.textContent = `No tengo datos de esa fecha. El historial empieza el ${formatearFecha(d.primera, true)}.`;
                 } else {

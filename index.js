@@ -300,6 +300,36 @@ async function guardarUsdtEnRedis(fecha, hora, valor) {
     }
 }
 
+// Tasas pasadas del BCV (sacadas de los Excel que el BCV publica por trimestre, en
+// "Tipo de Cambio de Referencia SMC"), guardadas en bcv-historico.json: { "YYYY-MM-DD": { usd, eur } }
+// con la fecha valor y el precio de venta, igual que lo que muestra la página del BCV.
+// Se cargan en Redis una sola vez; HSETNX asegura que nunca pisen lo guardado en vivo.
+const RUTA_HISTORICO_BCV = path.join(__dirname, 'bcv-historico.json');
+const MARCA_IMPORTACION_BCV = 'meta:bcv-historico:v1'; // si algún día se rehace el archivo, se sube el número
+
+async function importarHistoricoBcv() {
+    if (!redisActivo() || !fs.existsSync(RUTA_HISTORICO_BCV)) return;
+    try {
+        const [yaImportado] = await redisPipeline([['GET', MARCA_IMPORTACION_BCV]]);
+        if (yaImportado) return;
+
+        const datos = JSON.parse(fs.readFileSync(RUTA_HISTORICO_BCV, 'utf8'));
+        const fechas = Object.keys(datos).filter(f => REGEX_FECHA.test(f));
+
+        for (let i = 0; i < fechas.length; i += 200) {
+            const lote = fechas.slice(i, i + 200).map(f =>
+                ['HSETNX', 'bcv', f, JSON.stringify({ usd: datos[f].usd, eur: datos[f].eur })]
+            );
+            await redisPipeline(lote);
+        }
+        await redisPipeline([['SET', MARCA_IMPORTACION_BCV, new Date().toISOString()]]);
+        console.log(`[Redis] Histórico del BCV importado: ${fechas.length} días (${fechas[0]} a ${fechas[fechas.length - 1]}).`);
+    } catch (error) {
+        // Sin la marca, se reintenta en el próximo arranque
+        console.error('[Redis] No se pudo importar el histórico del BCV:', error.message);
+    }
+}
+
 // Al arrancar, reconstruye "valor actual" y "valor anterior" desde Redis, para que
 // las variaciones sigan funcionando aunque Render haya reiniciado el servicio.
 async function restaurarDesdeRedis() {
@@ -467,6 +497,12 @@ app.get('/api/historial/bcv', async (req, res) => {
             if (!vigente) {
                 return res.json({ disponible: true, encontrado: false, primera: entradas[entradas.length - 1].fecha });
             }
+            // Fines de semana y feriados dejan pocos días sin tasa. Si la anterior queda muy lejos
+            // hay un hueco en los datos: mejor decirlo que afirmar que esa tasa seguía vigente.
+            const diasDeDiferencia = (Date.parse(fecha) - Date.parse(vigente.fecha)) / (24 * 60 * 60 * 1000);
+            if (diasDeDiferencia > 7) {
+                return res.json({ disponible: true, encontrado: false, hueco: true, cercana: vigente.fecha });
+            }
             return res.json({ disponible: true, encontrado: true, exacta: false, pedida: fecha, ...vigente });
         }
 
@@ -521,6 +557,7 @@ app.listen(PORT, async () => {
     const revisar = () => actualizarHistorial().catch(error => console.error('[Historial] Error al actualizar:', error.message));
 
     cargarHistorial();
+    await importarHistoricoBcv(); // primero el histórico, para que la restauración ya lo vea
     await restaurarDesdeRedis();
     revisar(); // primera lectura al arrancar, no esperamos 5 minutos
     setInterval(revisar, 5 * 60 * 1000); // cada 5 minutos revisa si cambió la hora o el BCV
