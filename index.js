@@ -100,34 +100,40 @@ async function getBCVRates() {
         let usdFinal = parseFloat(usdText).toFixed(2);
         let eurFinal = parseFloat(eurText).toFixed(2);
 
-        return { 
-            usd: isNaN(usdFinal) ? "0.00" : usdFinal, 
-            eur: isNaN(eurFinal) ? "0.00" : eurFinal 
+        // "Fecha Valor": el día para el que rige esta tasa (el BCV la publica el día antes).
+        // Es la fecha con la que se guarda en el historial.
+        let fecha = null;
+        $('.date-display-single').each((_, el) => {
+            if (/fecha valor/i.test($(el).parent().text())) {
+                const candidata = ($(el).attr('content') || '').slice(0, 10);
+                if (/^\d{4}-\d{2}-\d{2}$/.test(candidata)) fecha = candidata;
+                return false; // ya la encontramos, dejamos de buscar
+            }
+        });
+
+        return {
+            usd: isNaN(usdFinal) ? "0.00" : usdFinal,
+            eur: isNaN(eurFinal) ? "0.00" : eurFinal,
+            fecha
         };
     } catch (error) {
         console.error("Error BCV:", error.message);
-        return { usd: "0.00", eur: "0.00" };
+        return { usd: "0.00", eur: "0.00", fecha: null };
     }
 }
 
-// --- HISTORIAL (para saber cuánto subió o bajó) ---
+// --- ESTADO (para saber cuánto subió o bajó) ---
 // Guardamos el último valor "confirmado" de cada tasa y el que tenía justo antes,
-// para poder mostrar la variación. Se guarda en un archivo local: si Render
-// reinicia el servicio se pierde y se reconstruye solo con las próximas horas.
+// para poder mostrar la variación. Se guarda en un archivo local, y si hay base de
+// datos (Upstash) se reconstruye desde ahí cuando Render reinicia el servicio.
 const RUTA_HISTORIAL = path.join(__dirname, 'historial.json');
 
 let historial = {
-    bcv: { usd: null, eur: null },           // último valor BCV visto
-    bcvAnterior: { usd: null, eur: null },   // el que tenía antes de cambiar (se actualiza 1 vez al día)
-    binance: { valor: null, hora: null },    // valor de USDT de la hora en curso
-    binanceAnterior: { valor: null, hora: null } // valor de la hora anterior
+    bcv: { usd: null, eur: null, fecha: null },   // último valor BCV visto y su "fecha valor"
+    bcvAnterior: { usd: null, eur: null },        // el que tenía antes de cambiar (se actualiza 1 vez al día)
+    binance: { valor: null, hora: null, fecha: null },          // valor de USDT de la hora en curso
+    binanceAnterior: { valor: null, hora: null, fecha: null }   // valor de la hora anterior
 };
-
-// Semilla de arranque: precios BCV del lunes 07/09/2026, para tener con qué
-// comparar desde ya en vez de esperar hasta el próximo cambio del BCV.
-// Solo se usa si todavía no hay un "anterior" real guardado; en cuanto el BCV
-// cambie de valor una vez, esto queda reemplazado para siempre por el dato real.
-const SEMILLA_BCV_ANTERIOR = { usd: '813.74', eur: '945.65' };
 
 function cargarHistorial() {
     try {
@@ -137,11 +143,6 @@ function cargarHistorial() {
         }
     } catch (error) {
         console.error('[Historial] No se pudo leer, se empieza de cero:', error.message);
-    }
-
-    if (historial.bcvAnterior.usd === null) {
-        historial.bcvAnterior = { ...SEMILLA_BCV_ANTERIOR };
-        console.log('[Historial] Sin comparación previa, se usa la semilla del lunes.');
     }
 }
 
@@ -154,11 +155,178 @@ function guardarHistorial() {
 }
 
 function horaActualCaracas() {
-    // Devuelve 0-23 en hora de Venezuela, sin depender de en qué zona horaria esté Render
+    // Devuelve 0-23 en hora de Venezuela, sin depender de en qué zona horaria esté Render.
+    // hourCycle h23 evita que la medianoche salga como "24".
     return parseInt(
-        new Date().toLocaleString('en-US', { timeZone: 'America/Caracas', hour: '2-digit', hour12: false }),
+        new Date().toLocaleString('en-US', { timeZone: 'America/Caracas', hour: '2-digit', hourCycle: 'h23' }),
         10
     );
+}
+
+// Fecha de Venezuela como "YYYY-MM-DD" (haceDias = 0 es hoy, 1 es ayer, ...)
+function fechaCaracas(haceDias = 0) {
+    const dia = new Date(Date.now() - haceDias * 24 * 60 * 60 * 1000);
+    const partes = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Caracas', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(dia);
+    const valor = tipo => partes.find(p => p.type === tipo).value;
+    return `${valor('year')}-${valor('month')}-${valor('day')}`;
+}
+
+// --- BASE DE DATOS (Upstash Redis, por REST) ---
+// Aquí vive el historial de días anteriores, porque el disco de Render se borra
+// cada vez que el servicio se reinicia. Datos:
+//   hash "bcv"           -> campo: fecha valor (YYYY-MM-DD)  valor: {"usd":"876.80","eur":"1012.30"}
+//   hash "usdt:<fecha>"  -> campo: hora (0-23)               valor: USDT de esa hora en punto
+// Las variables UPSTASH_REDIS_REST_URL y UPSTASH_REDIS_REST_TOKEN se ponen en Render.
+const UPSTASH_URL = (process.env.UPSTASH_REDIS_REST_URL || '').replace(/\/+$/, '');
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const REGEX_FECHA = /^\d{4}-\d{2}-\d{2}$/;
+
+function redisActivo() {
+    return Boolean(UPSTASH_URL && UPSTASH_TOKEN);
+}
+
+// Manda varios comandos juntos, p. ej. [['HSET', 'bcv', '2026-10-13', '{...}'], ['EXPIRE', ...]].
+// Devuelve un arreglo con el resultado de cada uno, y lanza error si alguno falla.
+async function redisPipeline(comandos) {
+    const { data } = await axios.post(`${UPSTASH_URL}/pipeline`, comandos, {
+        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
+        timeout: 8000
+    });
+    return data.map(item => {
+        if (item.error) throw new Error(item.error);
+        return item.result;
+    });
+}
+
+// HGETALL puede llegar como arreglo plano [campo, valor, campo, valor...] o como objeto
+function hashAObjeto(resultado) {
+    if (!resultado) return {};
+    if (Array.isArray(resultado)) {
+        const objeto = {};
+        for (let i = 0; i + 1 < resultado.length; i += 2) objeto[resultado[i]] = resultado[i + 1];
+        return objeto;
+    }
+    return resultado;
+}
+
+// Convierte lo leído de Redis en algo cómodo para la página:
+//   bcv:  [{ fecha, usd, eur }]  de la más reciente a la más vieja
+//   usdt: [{ fecha, horas: [{ hora, valor }], min, max, promedio }]  de hoy hacia atrás
+function armarHistorial(bcvHash, usdtPorFecha, limite) {
+    const bcv = Object.entries(bcvHash)
+        .filter(([fecha]) => REGEX_FECHA.test(fecha))
+        .map(([fecha, json]) => {
+            try {
+                const v = JSON.parse(json);
+                return { fecha, usd: Number(v.usd), eur: Number(v.eur) };
+            } catch (e) {
+                return null;
+            }
+        })
+        .filter(e => e && e.usd > 0 && e.eur > 0)
+        .sort((a, b) => b.fecha.localeCompare(a.fecha))
+        .slice(0, limite);
+
+    const usdt = Object.entries(usdtPorFecha)
+        .map(([fecha, hash]) => {
+            const horas = Object.entries(hash)
+                .map(([hora, valor]) => ({ hora: Number(hora), valor: Number(valor) }))
+                .filter(p => Number.isInteger(p.hora) && p.hora >= 0 && p.hora <= 23 && p.valor > 0)
+                .sort((a, b) => a.hora - b.hora);
+            if (horas.length === 0) return null;
+
+            const valores = horas.map(p => p.valor);
+            const promedio = valores.reduce((a, b) => a + b, 0) / valores.length;
+            return {
+                fecha,
+                horas,
+                min: Math.min(...valores),
+                max: Math.max(...valores),
+                promedio: Number(promedio.toFixed(2))
+            };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+    return { bcv, usdt };
+}
+
+// Lee de Redis el BCV completo y los últimos `dias` días del USDT.
+async function leerHistorial(dias) {
+    const fechas = Array.from({ length: dias }, (_, i) => fechaCaracas(i));
+    const comandos = [['HGETALL', 'bcv'], ...fechas.map(f => ['HGETALL', `usdt:${f}`])];
+    const resultados = await redisPipeline(comandos);
+
+    const usdtPorFecha = {};
+    fechas.forEach((fecha, i) => { usdtPorFecha[fecha] = hashAObjeto(resultados[i + 1]); });
+    return armarHistorial(hashAObjeto(resultados[0]), usdtPorFecha, dias);
+}
+
+// Para no repetir la misma escritura cada 5 minutos mientras el BCV no cambia
+let ultimoBcvGuardado = null;
+
+async function guardarBcvEnRedis(bcv) {
+    if (!redisActivo()) return;
+    if (!bcv.fecha) {
+        console.log('[Redis] No se encontró la fecha valor del BCV, no se guarda en el historial.');
+        return;
+    }
+    const firma = `${bcv.fecha}|${bcv.usd}|${bcv.eur}`;
+    if (firma === ultimoBcvGuardado) return;
+
+    try {
+        await redisPipeline([['HSET', 'bcv', bcv.fecha, JSON.stringify({ usd: bcv.usd, eur: bcv.eur })]]);
+        ultimoBcvGuardado = firma;
+        console.log(`[Redis] BCV guardado para ${bcv.fecha}: USD ${bcv.usd} / EUR ${bcv.eur}`);
+    } catch (error) {
+        console.error('[Redis] No se pudo guardar el BCV:', error.message);
+    }
+}
+
+async function guardarUsdtEnRedis(fecha, hora, valor) {
+    if (!redisActivo()) return;
+    const clave = `usdt:${fecha}`;
+    try {
+        // HSETNX: si ya hay una muestra de esa hora (p. ej. tras un reinicio) no la pisa
+        await redisPipeline([
+            ['HSETNX', clave, String(hora), String(valor)],
+            ['EXPIRE', clave, String(60 * 60 * 24 * 400)] // se borran solas pasado más de un año
+        ]);
+        console.log(`[Redis] USDT guardado: ${fecha} ${hora}h = ${valor}`);
+    } catch (error) {
+        console.error('[Redis] No se pudo guardar el USDT:', error.message);
+    }
+}
+
+// Al arrancar, reconstruye "valor actual" y "valor anterior" desde Redis, para que
+// las variaciones sigan funcionando aunque Render haya reiniciado el servicio.
+async function restaurarDesdeRedis() {
+    if (!redisActivo()) return;
+    try {
+        const { bcv, usdt } = await leerHistorial(2);
+
+        if (bcv[0]) {
+            historial.bcv = { usd: bcv[0].usd.toFixed(2), eur: bcv[0].eur.toFixed(2), fecha: bcv[0].fecha };
+            ultimoBcvGuardado = `${bcv[0].fecha}|${historial.bcv.usd}|${historial.bcv.eur}`;
+        }
+        if (bcv[1]) {
+            historial.bcvAnterior = { usd: bcv[1].usd.toFixed(2), eur: bcv[1].eur.toFixed(2) };
+        }
+
+        const muestras = usdt
+            .flatMap(dia => dia.horas.map(p => ({ fecha: dia.fecha, hora: p.hora, valor: p.valor })))
+            .sort((a, b) => `${a.fecha} ${String(a.hora).padStart(2, '0')}`.localeCompare(`${b.fecha} ${String(b.hora).padStart(2, '0')}`));
+        const ultima = muestras[muestras.length - 1];
+        const previa = muestras[muestras.length - 2];
+        if (ultima) historial.binance = { valor: ultima.valor.toFixed(2), hora: ultima.hora, fecha: ultima.fecha };
+        if (previa) historial.binanceAnterior = { valor: previa.valor.toFixed(2), hora: previa.hora, fecha: previa.fecha };
+
+        console.log('[Redis] Estado restaurado desde la base de datos.');
+    } catch (error) {
+        console.error('[Redis] No se pudo restaurar el estado:', error.message);
+    }
 }
 
 // Se corre sola cada pocos minutos: detecta cuándo cambia el BCV (una vez al día)
@@ -172,17 +340,21 @@ async function actualizarHistorial() {
         if (cambioDeValor) {
             historial.bcvAnterior = { usd: historial.bcv.usd, eur: historial.bcv.eur };
         }
-        historial.bcv = { usd: bcvNuevo.usd, eur: bcvNuevo.eur };
+        historial.bcv = { usd: bcvNuevo.usd, eur: bcvNuevo.eur, fecha: bcvNuevo.fecha };
+        await guardarBcvEnRedis(bcvNuevo);
     }
 
     if (binanceNuevo !== "0.00") {
         const horaActual = horaActualCaracas();
-        if (historial.binance.hora !== horaActual) {
+        const fechaActual = fechaCaracas();
+        const cambioDeHora = historial.binance.hora !== horaActual || historial.binance.fecha !== fechaActual;
+        if (cambioDeHora) {
             // Cambiamos de hora: lo que teníamos como "actual" pasa a ser "de la hora anterior"
             if (historial.binance.valor !== null) {
-                historial.binanceAnterior = { valor: historial.binance.valor, hora: historial.binance.hora };
+                historial.binanceAnterior = { ...historial.binance };
             }
-            historial.binance = { valor: binanceNuevo, hora: horaActual };
+            historial.binance = { valor: binanceNuevo, hora: horaActual, fecha: fechaActual };
+            await guardarUsdtEnRedis(fechaActual, horaActual, binanceNuevo);
         } else {
             // Seguimos en la misma hora: solo refrescamos el valor "en curso"
             historial.binance.valor = binanceNuevo;
@@ -230,6 +402,82 @@ app.get('/api/tasas', async (req, res) => {
     });
 });
 
+// --- RUTA API (HISTORIAL) ---
+// Se guarda la última respuesta 2 minutos para no pegarle a Redis cada vez que alguien
+// abre la pestaña (el plan gratis tiene un tope mensual de comandos).
+let cacheHistorial = { dias: 0, momento: 0, datos: null };
+
+app.get('/api/historial', async (req, res) => {
+    if (!redisActivo()) {
+        return res.json({ disponible: false, bcv: [], usdt: [] });
+    }
+
+    const dias = Math.min(Math.max(parseInt(req.query.dias, 10) || 30, 1), 90);
+    const ahora = Date.now();
+    if (cacheHistorial.datos && cacheHistorial.dias === dias && ahora - cacheHistorial.momento < 2 * 60 * 1000) {
+        return res.json(cacheHistorial.datos);
+    }
+
+    try {
+        const datos = { disponible: true, hoy: fechaCaracas(), ...(await leerHistorial(dias)) };
+        cacheHistorial = { dias, momento: ahora, datos };
+        res.json(datos);
+    } catch (error) {
+        console.error('[Historial] No se pudo leer de Redis:', error.message);
+        res.status(502).json({ disponible: false, bcv: [], usdt: [] });
+    }
+});
+
+// --- RUTA API (HISTORIAL DEL BCV: BUSCAR UN DÍA / VER MÁS) ---
+// El BCV completo es chico (un registro por día hábil), así que se lee entero y se
+// guarda 2 minutos en memoria.
+let cacheBcvCompleto = { momento: 0, entradas: [] };
+
+async function leerBcvCompleto() {
+    if (Date.now() - cacheBcvCompleto.momento < 2 * 60 * 1000) return cacheBcvCompleto.entradas;
+    const [hash] = await redisPipeline([['HGETALL', 'bcv']]);
+    const { bcv } = armarHistorial(hashAObjeto(hash), {}, Infinity); // de la más reciente a la más vieja
+    cacheBcvCompleto = { momento: Date.now(), entradas: bcv };
+    return bcv;
+}
+
+// ?fecha=YYYY-MM-DD  -> la tasa de ese día. Si el BCV no publicó una con esa fecha exacta
+//                       (fin de semana, feriado) devuelve la que estaba vigente ese día.
+// ?limite=N          -> las últimas N tasas publicadas.
+app.get('/api/historial/bcv', async (req, res) => {
+    if (!redisActivo()) return res.json({ disponible: false });
+
+    try {
+        const entradas = await leerBcvCompleto();
+
+        if (req.query.fecha !== undefined) {
+            const fecha = String(req.query.fecha);
+            if (!REGEX_FECHA.test(fecha)) return res.status(400).json({ disponible: true, error: 'Fecha inválida' });
+            if (entradas.length === 0) return res.json({ disponible: true, encontrado: false, primera: null });
+
+            const exacta = entradas.find(e => e.fecha === fecha);
+            if (exacta) return res.json({ disponible: true, encontrado: true, exacta: true, pedida: fecha, ...exacta });
+
+            // Más nueva que la última tasa publicada: todavía no existe
+            if (fecha > entradas[0].fecha) {
+                return res.json({ disponible: true, encontrado: false, futura: true, ultima: entradas[0].fecha });
+            }
+            // La vigente ese día es la publicada más reciente que no sea posterior a la fecha pedida
+            const vigente = entradas.find(e => e.fecha < fecha);
+            if (!vigente) {
+                return res.json({ disponible: true, encontrado: false, primera: entradas[entradas.length - 1].fecha });
+            }
+            return res.json({ disponible: true, encontrado: true, exacta: false, pedida: fecha, ...vigente });
+        }
+
+        const limite = Math.min(Math.max(parseInt(req.query.limite, 10) || 30, 1), 365);
+        res.json({ disponible: true, total: entradas.length, bcv: entradas.slice(0, limite) });
+    } catch (error) {
+        console.error('[Historial] No se pudo leer el BCV de Redis:', error.message);
+        res.status(502).json({ disponible: false });
+    }
+});
+
 // --- RUTA PRINCIPAL (WEB) ---
 // Cuando alguien entra a la página principal, avisamos por Telegram y enviamos el HTML.
 app.get('/', (req, res) => {
@@ -265,10 +513,15 @@ app.use(express.static(path.join(__dirname)));
 // process.env.PORT es el puerto que nos asignará la nube (Render)
 // 3000 es el puerto si lo usas en tu PC local
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`🚀 Servidor listo en puerto ${PORT}`);
+    console.log(`[Redis] ${redisActivo() ? 'Conectado a Upstash.' : 'Sin UPSTASH_REDIS_REST_URL/TOKEN: el historial por días no estará disponible.'}`);
+
+    // Un error aquí nunca debe tumbar el servidor, así que cada vuelta atrapa lo suyo
+    const revisar = () => actualizarHistorial().catch(error => console.error('[Historial] Error al actualizar:', error.message));
 
     cargarHistorial();
-    actualizarHistorial(); // primera lectura al arrancar, no esperamos 5 minutos
-    setInterval(actualizarHistorial, 5 * 60 * 1000); // cada 5 minutos revisa si cambió la hora o el BCV
+    await restaurarDesdeRedis();
+    revisar(); // primera lectura al arrancar, no esperamos 5 minutos
+    setInterval(revisar, 5 * 60 * 1000); // cada 5 minutos revisa si cambió la hora o el BCV
 });

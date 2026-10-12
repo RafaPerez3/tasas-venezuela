@@ -216,6 +216,129 @@
         }
         .modal-cerrar:hover { background: none; color: #fff; }
 
+        /* --- PESTAÑAS HOY / HISTORIAL --- */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            background: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 20px;
+            padding: 2px;
+            margin-bottom: 8px;
+        }
+        .tab-btn {
+            background: none;
+            color: #888;
+            border: none;
+            border-radius: 16px;
+            padding: 3px 16px;
+            margin: 0;
+            font-size: 0.8rem;
+            font-weight: 700;
+            transition: background 0.2s, color 0.2s;
+        }
+        .tab-btn:hover { background: #2a2a2a; color: #ccc; }
+        .tab-btn.activa { background: #007bff; color: #fff; }
+        .tab-btn.activa:hover { background: #0056b3; }
+
+        .vista {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .vista[hidden] { display: none; }
+
+        /* --- HISTORIAL --- */
+        .hist-nota { font-size: 0.72rem; color: #777; margin: 4px 0 6px; }
+        .hist-vacio { font-size: 0.85rem; color: #888; padding: 12px 0 4px; line-height: 1.4; }
+
+        .hist-cabecera, .hist-fila {
+            display: grid;
+            grid-template-columns: 1.15fr 1fr 1fr;
+            gap: 6px;
+            align-items: center;
+            text-align: right;
+        }
+        .hist-cabecera {
+            font-size: 0.68rem;
+            color: #777;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 8px 0 4px;
+            border-bottom: 1px solid #333;
+            margin-top: 6px;
+        }
+        .hist-cabecera span:first-child, .hist-fila .hist-fecha { text-align: left; }
+        .hist-fila {
+            padding: 7px 0;
+            border-bottom: 1px solid #2a2a2a;
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+        .hist-fila:last-child { border-bottom: none; }
+        .hist-fecha { color: #aaa; font-size: 0.8rem; font-weight: 400; }
+
+        .var { display: block; font-size: 0.68rem; font-weight: 400; color: #666; }
+        .var.subida { color: #27ae60; }
+        .var.bajada { color: #e74c3c; }
+
+        details.dia-usdt { border-bottom: 1px solid #2a2a2a; text-align: left; }
+        details.dia-usdt:last-child { border-bottom: none; }
+        details.dia-usdt summary {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 0;
+            cursor: pointer;
+            list-style: none;
+        }
+        details.dia-usdt summary::-webkit-details-marker { display: none; }
+        details.dia-usdt summary::after {
+            content: '▾';
+            color: #777;
+            transition: transform 0.2s;
+        }
+        details.dia-usdt[open] summary::after { transform: rotate(180deg); }
+        .dia-resumen {
+            margin-left: auto;
+            text-align: right;
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: #f1c40f;
+        }
+        .dia-resumen small { display: block; font-weight: 400; font-size: 0.68rem; color: #777; }
+        .hist-buscar { margin-top: 8px; padding-bottom: 8px; border-bottom: 1px solid #333; }
+        .hist-etiqueta { display: block; font-size: 0.7rem; color: #777; margin-bottom: 4px; }
+        .hist-buscar input[type="date"] { color-scheme: dark; }
+        .hist-resultado {
+            margin-top: 8px;
+            padding: 8px 10px;
+            background: #262626;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            color: #ccc;
+        }
+        .hist-resultado[hidden] { display: none; }
+        .hist-resultado .hist-fecha { display: block; margin-bottom: 2px; }
+        .hist-resultado strong { font-size: 1rem; }
+
+        .btn-secundario {
+            background: #2c2c2c;
+            border: 1px solid #444;
+            color: #ccc;
+            padding: 6px 14px;
+            margin-top: 8px;
+            font-size: 0.8rem;
+            border-radius: 20px;
+        }
+        .btn-secundario:hover { background: #3a3a3a; }
+        .btn-secundario[hidden] { display: none; }
+
+        .grafico { padding: 2px 0 10px; }
+        .grafico svg { display: block; width: 100%; height: auto; }
+
         button {
             background: #007bff; color: white; border: none; padding: 12px 25px; 
             border-radius: 50px; font-size: 1rem; cursor: pointer; margin-top: 10px;
@@ -230,6 +353,12 @@
     <h1>Tasas Hoy 🇻🇪</h1>
     <span id="hora" class="subtitle">Esperando datos...</span>
 
+    <div class="tabs" role="tablist">
+        <button class="tab-btn activa" id="tab-hoy" role="tab" aria-selected="true" onclick="mostrarVista('hoy')">Hoy</button>
+        <button class="tab-btn" id="tab-historial" role="tab" aria-selected="false" onclick="mostrarVista('historial')">📈 Historial</button>
+    </div>
+
+    <div id="vista-hoy" class="vista">
     <div class="brecha-row">
         <div id="brecha" class="brecha-pill">Brecha BCV↔USDT: <span class="brecha-valor">--</span></div>
         <button class="info-icon-btn" onclick="abrirInfo()" title="¿Cómo funcionan estos precios?" aria-label="¿Cómo funcionan estos precios?">ℹ️</button>
@@ -281,6 +410,29 @@
     </div>
 
     <button id="btn-update" onclick="obtenerDatos()">🔄 Actualizar</button>
+    </div>
+
+    <div id="vista-historial" class="vista" hidden>
+        <div class="card">
+            <div class="card-title">BCV · dólar y euro</div>
+
+            <div class="hist-buscar">
+                <label for="hist-fecha" class="hist-etiqueta">Buscar un día</label>
+                <input type="date" id="hist-fecha" class="calc-input" onchange="buscarFecha(this.value)">
+                <div id="hist-resultado" class="hist-resultado" hidden></div>
+            </div>
+
+            <p class="hist-nota">Cada precio con la fecha para la que rige.</p>
+            <div id="hist-bcv">Cargando...</div>
+            <button id="hist-ver-mas" class="btn-secundario" onclick="verMasBcv()" hidden>Ver más días</button>
+        </div>
+
+        <div class="card card-binance">
+            <div class="card-title">USDT · día por día</div>
+            <p class="hist-nota">Toca un día para ver cómo se movió hora por hora.</p>
+            <div id="hist-usdt">Cargando...</div>
+        </div>
+    </div>
 
     <div id="modal-info" class="modal-overlay" hidden onclick="cerrarInfoFuera(event)">
         <div class="modal-box">
@@ -444,6 +596,193 @@
         // Cierra si el clic fue en el fondo oscuro, no dentro de la tarjeta del modal
         function cerrarInfoFuera(evento) {
             if (evento.target.id === 'modal-info') cerrarInfo();
+        }
+
+        // --- PESTAÑAS ---
+        function mostrarVista(vista) {
+            const esHoy = vista === 'hoy';
+            document.getElementById('vista-hoy').hidden = !esHoy;
+            document.getElementById('vista-historial').hidden = esHoy;
+
+            const tabHoy = document.getElementById('tab-hoy');
+            const tabHistorial = document.getElementById('tab-historial');
+            tabHoy.classList.toggle('activa', esHoy);
+            tabHistorial.classList.toggle('activa', !esHoy);
+            tabHoy.setAttribute('aria-selected', esHoy);
+            tabHistorial.setAttribute('aria-selected', !esHoy);
+
+            if (!esHoy) cargarHistorial();
+        }
+
+        // --- HISTORIAL ---
+        let historialPintado = false;
+        const num2 = n => Number(n).toFixed(2);
+
+        // Con año si es de otro año (o si se pide), para que al ir hacia atrás no se confundan
+        function formatearFecha(fecha, forzarAnio = false) {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return '';
+            const conAnio = forzarAnio || fecha.slice(0, 4) !== String(new Date().getFullYear());
+            const opciones = { weekday: 'short', day: 'numeric', month: 'short' };
+            if (conAnio) opciones.year = 'numeric';
+            // Mediodía para que ningún huso horario corra el día
+            return new Date(fecha + 'T12:00:00').toLocaleDateString('es-VE', opciones);
+        }
+
+        // Lineita de variación contra el día anterior, ej. "▲ +0.12%"
+        function variacionHtml(actual, anterior) {
+            if (!anterior) return '<span class="var">&nbsp;</span>';
+            const pct = Number((((actual - anterior) / anterior) * 100).toFixed(2));
+            const signo = pct > 0 ? '+' : '';
+            const flecha = pct > 0 ? '▲' : pct < 0 ? '▼' : '■';
+            const clase = pct > 0 ? 'subida' : pct < 0 ? 'bajada' : '';
+            return `<span class="var ${clase}">${flecha} ${signo}${pct.toFixed(2)}%</span>`;
+        }
+
+        function pintarBcv(filas) {
+            const cont = document.getElementById('hist-bcv');
+            if (!filas.length) {
+                cont.innerHTML = '<div class="hist-vacio">Todavía no hay días guardados. El historial se va llenando solo: un día nuevo cada vez que el BCV publica su tasa.</div>';
+                return;
+            }
+
+            const cabecera = '<div class="hist-cabecera"><span>Fecha</span><span>Dólar</span><span>Euro</span></div>';
+            const filasHtml = filas.map((f, i) => {
+                const anterior = filas[i + 1]; // la lista viene de la más reciente a la más vieja
+                return `<div class="hist-fila">
+                    <span class="hist-fecha">${formatearFecha(f.fecha)}</span>
+                    <span class="usd-color">${num2(f.usd)}${variacionHtml(f.usd, anterior && anterior.usd)}</span>
+                    <span class="eur-color">${num2(f.eur)}${variacionHtml(f.eur, anterior && anterior.eur)}</span>
+                </div>`;
+            }).join('');
+
+            cont.innerHTML = cabecera + filasHtml;
+        }
+
+        // Gráfico de líneas (SVG a mano, sin librerías): una muestra por hora, de 0h a 23h
+        function graficoHoras(horas, min, max) {
+            const W = 300, H = 120, IZQ = 8, DER = 8, ARRIBA = 16, ABAJO = 30;
+            const plano = max === min; // si todas las horas valen lo mismo, la línea va al centro
+            const x = h => IZQ + (h / 23) * (W - IZQ - DER);
+            const y = v => plano
+                ? (ARRIBA + H - ABAJO) / 2
+                : ARRIBA + (1 - (v - min) / (max - min)) * (H - ARRIBA - ABAJO);
+
+            const puntos = horas.map(p => `${x(p.hora).toFixed(1)},${y(p.valor).toFixed(1)}`).join(' ');
+            const marcasHora = [0, 6, 12, 18, 23].map(h =>
+                `<text x="${x(h).toFixed(1)}" y="${H - 4}" text-anchor="middle" font-size="9" fill="#777">${h}h</text>`
+            ).join('');
+            const circulos = horas.map(p =>
+                `<circle cx="${x(p.hora).toFixed(1)}" cy="${y(p.valor).toFixed(1)}" r="3" fill="#f1c40f"><title>${String(p.hora).padStart(2, '0')}:00 — ${num2(p.valor)} Bs</title></circle>`
+            ).join('');
+
+            return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="USDT hora por hora">
+                <line x1="${IZQ}" y1="${ARRIBA}" x2="${W - DER}" y2="${ARRIBA}" stroke="#2a2a2a"/>
+                <line x1="${IZQ}" y1="${H - ABAJO}" x2="${W - DER}" y2="${H - ABAJO}" stroke="#2a2a2a"/>
+                <text x="${IZQ}" y="${ARRIBA - 4}" font-size="9" fill="#777">máx ${num2(max)}</text>
+                <text x="${IZQ}" y="${H - ABAJO + 10}" font-size="9" fill="#777">mín ${num2(min)}</text>
+                <polyline points="${puntos}" fill="none" stroke="#f1c40f" stroke-width="2" stroke-linejoin="round"/>
+                ${circulos}
+                ${marcasHora}
+            </svg>`;
+        }
+
+        function pintarUsdt(dias, hoy) {
+            const cont = document.getElementById('hist-usdt');
+            if (!dias.length) {
+                cont.innerHTML = '<div class="hist-vacio">Todavía no hay horas guardadas. Se toma una muestra cada hora en punto y empieza a llenarse desde ahora.</div>';
+                return;
+            }
+
+            cont.innerHTML = dias.map(d => {
+                const etiqueta = (d.fecha === hoy ? 'Hoy · ' : '') + formatearFecha(d.fecha);
+                return `<details class="dia-usdt">
+                    <summary>
+                        <span class="hist-fecha">${etiqueta}</span>
+                        <span class="dia-resumen">prom. ${num2(d.promedio)}<small>mín ${num2(d.min)} · máx ${num2(d.max)}</small></span>
+                    </summary>
+                    <div class="grafico">${graficoHoras(d.horas, d.min, d.max)}</div>
+                </details>`;
+            }).join('');
+        }
+
+        // Busca la tasa del BCV de un día cualquiera (hoy o hacia atrás)
+        async function buscarFecha(fecha) {
+            const caja = document.getElementById('hist-resultado');
+            if (!fecha) { caja.hidden = true; return; }
+
+            caja.hidden = false;
+            caja.textContent = 'Buscando...';
+            try {
+                const res = await fetch('/api/historial/bcv?fecha=' + encodeURIComponent(fecha));
+                if (!res.ok) throw new Error("Error del servidor");
+                const d = await res.json();
+                if (!d.disponible) throw new Error("Historial no disponible");
+
+                if (d.encontrado) {
+                    const valores = `Dólar <strong class="usd-color">${num2(d.usd)}</strong> · Euro <strong class="eur-color">${num2(d.eur)}</strong>`;
+                    const intro = d.exacta
+                        ? formatearFecha(fecha, true)
+                        : `${formatearFecha(fecha, true)}: no hubo tasa con esa fecha (fin de semana o feriado). Estaba vigente la del ${formatearFecha(d.fecha, true)}:`;
+                    caja.innerHTML = `<span class="hist-fecha">${intro}</span>${valores}`;
+                } else if (d.futura) {
+                    caja.textContent = `Todavía no hay tasa para esa fecha. La última publicada rige para el ${formatearFecha(d.ultima, true)}.`;
+                } else if (d.primera) {
+                    caja.textContent = `No tengo datos de esa fecha. El historial empieza el ${formatearFecha(d.primera, true)}.`;
+                } else {
+                    caja.textContent = 'Todavía no hay días guardados.';
+                }
+            } catch (error) {
+                console.error(error);
+                caja.textContent = 'No se pudo buscar ahora. Intenta de nuevo en un momento.';
+            }
+        }
+
+        // Muestra 30 tasas más de la lista del BCV
+        let bcvLimite = 30;
+
+        async function verMasBcv() {
+            const btn = document.getElementById('hist-ver-mas');
+            btn.disabled = true;
+            btn.textContent = 'Cargando...';
+            try {
+                const res = await fetch('/api/historial/bcv?limite=' + (bcvLimite + 30));
+                if (!res.ok) throw new Error("Error del servidor");
+                const d = await res.json();
+                if (!d.disponible) throw new Error("Historial no disponible");
+
+                bcvLimite += 30;
+                pintarBcv(d.bcv);
+                btn.hidden = d.total <= bcvLimite; // ya se muestran todos
+                btn.textContent = 'Ver más días';
+            } catch (error) {
+                console.error(error);
+                btn.textContent = 'No se pudo cargar. Reintentar';
+            }
+            btn.disabled = false;
+        }
+
+        async function cargarHistorial() {
+            try {
+                const res = await fetch('/api/historial?dias=30');
+                if (!res.ok) throw new Error("Error del servidor");
+
+                const data = await res.json();
+                if (!data.disponible) throw new Error("Historial no disponible");
+
+                pintarBcv(data.bcv);
+                pintarUsdt(data.usdt, data.hoy);
+                bcvLimite = 30;
+                document.getElementById('hist-ver-mas').hidden = data.bcv.length < bcvLimite;
+                historialPintado = true;
+            } catch (error) {
+                console.error(error);
+                // Si ya había algo pintado lo dejamos; si no, avisamos
+                if (!historialPintado) {
+                    const aviso = '<div class="hist-vacio">No se pudo cargar el historial. Intenta de nuevo en un momento.</div>';
+                    document.getElementById('hist-bcv').innerHTML = aviso;
+                    document.getElementById('hist-usdt').innerHTML = aviso;
+                }
+            }
         }
 
         obtenerDatos();
