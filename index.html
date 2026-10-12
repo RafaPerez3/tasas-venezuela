@@ -249,6 +249,33 @@
         }
         .vista[hidden] { display: none; }
 
+        /* --- SUB-PESTAÑAS DEL HISTORIAL (BCV | USDT): subrayadas, para no confundirse con Hoy | Historial --- */
+        .subtabs {
+            display: flex;
+            justify-content: center;
+            gap: 28px;
+            width: 100%;
+            max-width: 350px;
+            border-bottom: 1px solid #333;
+            margin-bottom: 12px;
+        }
+        .subtab-btn {
+            background: none;
+            color: #888;
+            border: none;
+            border-bottom: 2px solid transparent;
+            border-radius: 0;
+            padding: 6px 4px;
+            margin: 0 0 -1px 0;
+            font-size: 0.9rem;
+            font-weight: 700;
+            transition: color 0.2s, border-color 0.2s;
+        }
+        .subtab-btn:hover { background: none; color: #ccc; }
+        .subtab-btn.activa { color: #fff; border-bottom-color: #007bff; }
+        .subtab-btn.activa:hover { background: none; color: #fff; }
+        .subtab-btn.usdt.activa { border-bottom-color: #f1c40f; }
+
         /* --- HISTORIAL --- */
         .hist-nota { font-size: 0.72rem; color: #777; margin: 4px 0 6px; }
         .hist-vacio { font-size: 0.85rem; color: #888; padding: 12px 0 4px; line-height: 1.4; }
@@ -413,24 +440,33 @@
     </div>
 
     <div id="vista-historial" class="vista" hidden>
-        <div class="card">
-            <div class="card-title">BCV · dólar y euro</div>
-
-            <div class="hist-buscar">
-                <label for="hist-fecha" class="hist-etiqueta">Buscar un día</label>
-                <input type="date" id="hist-fecha" class="calc-input" onchange="buscarFecha(this.value)">
-                <div id="hist-resultado" class="hist-resultado" hidden></div>
-            </div>
-
-            <p class="hist-nota">Cada precio con la fecha para la que rige.</p>
-            <div id="hist-bcv">Cargando...</div>
-            <button id="hist-ver-mas" class="btn-secundario" onclick="verMasBcv()" hidden>Ver más días</button>
+        <div class="subtabs" role="tablist" aria-label="Historial">
+            <button class="subtab-btn activa" id="subtab-bcv" role="tab" aria-selected="true" onclick="mostrarSubvista('bcv')">BCV</button>
+            <button class="subtab-btn usdt" id="subtab-usdt" role="tab" aria-selected="false" onclick="mostrarSubvista('usdt')">USDT</button>
         </div>
 
-        <div class="card card-binance">
-            <div class="card-title">USDT · día por día</div>
-            <p class="hist-nota">Toca un día para ver cómo se movió hora por hora.</p>
-            <div id="hist-usdt">Cargando...</div>
+        <div id="sub-bcv" class="vista">
+            <div class="card">
+                <div class="card-title">BCV · dólar y euro</div>
+
+                <div class="hist-buscar">
+                    <label for="hist-fecha" class="hist-etiqueta">Buscar un día</label>
+                    <input type="date" id="hist-fecha" class="calc-input" onchange="buscarFecha(this.value)">
+                    <div id="hist-resultado" class="hist-resultado" hidden></div>
+                </div>
+
+                <p class="hist-nota">Cada precio con la fecha para la que rige.</p>
+                <div id="hist-bcv">Cargando...</div>
+                <button id="hist-ver-mas" class="btn-secundario" onclick="verMasBcv()" hidden>Ver más días</button>
+            </div>
+        </div>
+
+        <div id="sub-usdt" class="vista" hidden>
+            <div class="card card-binance">
+                <div class="card-title">USDT · día por día</div>
+                <p class="hist-nota">Toca un día para ver cómo se movió hora por hora.</p>
+                <div id="hist-usdt">Cargando...</div>
+            </div>
         </div>
     </div>
 
@@ -614,6 +650,20 @@
             if (!esHoy) cargarHistorial();
         }
 
+        // --- SUB-PESTAÑAS DEL HISTORIAL (BCV | USDT) ---
+        function mostrarSubvista(sub) {
+            const esBcv = sub === 'bcv';
+            document.getElementById('sub-bcv').hidden = !esBcv;
+            document.getElementById('sub-usdt').hidden = esBcv;
+
+            const tabBcv = document.getElementById('subtab-bcv');
+            const tabUsdt = document.getElementById('subtab-usdt');
+            tabBcv.classList.toggle('activa', esBcv);
+            tabUsdt.classList.toggle('activa', !esBcv);
+            tabBcv.setAttribute('aria-selected', esBcv);
+            tabUsdt.setAttribute('aria-selected', !esBcv);
+        }
+
         // --- HISTORIAL ---
         let historialPintado = false;
         const num2 = n => Number(n).toFixed(2);
@@ -638,7 +688,9 @@
             return `<span class="var ${clase}">${flecha} ${signo}${pct.toFixed(2)}%</span>`;
         }
 
-        function pintarBcv(filas) {
+        // `filas` viene de la más reciente a la más vieja; se pintan solo las primeras `mostrar`,
+        // pero se usa la siguiente (aunque no se muestre) para calcular la variación de la última.
+        function pintarBcv(filas, mostrar = filas.length) {
             const cont = document.getElementById('hist-bcv');
             if (!filas.length) {
                 cont.innerHTML = '<div class="hist-vacio">Todavía no hay días guardados. El historial se va llenando solo: un día nuevo cada vez que el BCV publica su tasa.</div>';
@@ -646,8 +698,8 @@
             }
 
             const cabecera = '<div class="hist-cabecera"><span>Fecha</span><span>Dólar</span><span>Euro</span></div>';
-            const filasHtml = filas.map((f, i) => {
-                const anterior = filas[i + 1]; // la lista viene de la más reciente a la más vieja
+            const filasHtml = filas.slice(0, mostrar).map((f, i) => {
+                const anterior = filas[i + 1];
                 return `<div class="hist-fila">
                     <span class="hist-fecha">${formatearFecha(f.fecha)}</span>
                     <span class="usd-color">${num2(f.usd)}${variacionHtml(f.usd, anterior && anterior.usd)}</span>
@@ -739,21 +791,24 @@
             }
         }
 
-        // Muestra 30 tasas más de la lista del BCV
-        let bcvLimite = 30;
+        // La lista del BCV arranca con 7 días y "Ver más" agrega 30 cada vez
+        const BCV_INICIAL = 7;
+        let bcvLimite = BCV_INICIAL;
 
         async function verMasBcv() {
             const btn = document.getElementById('hist-ver-mas');
             btn.disabled = true;
             btn.textContent = 'Cargando...';
             try {
-                const res = await fetch('/api/historial/bcv?limite=' + (bcvLimite + 30));
+                const nuevoLimite = bcvLimite + 30;
+                // Se pide una fila de más solo para poder calcular la variación de la última visible
+                const res = await fetch('/api/historial/bcv?limite=' + (nuevoLimite + 1));
                 if (!res.ok) throw new Error("Error del servidor");
                 const d = await res.json();
                 if (!d.disponible) throw new Error("Historial no disponible");
 
-                bcvLimite += 30;
-                pintarBcv(d.bcv);
+                bcvLimite = nuevoLimite;
+                pintarBcv(d.bcv, bcvLimite);
                 btn.hidden = d.total <= bcvLimite; // ya se muestran todos
                 btn.textContent = 'Ver más días';
             } catch (error) {
@@ -771,10 +826,10 @@
                 const data = await res.json();
                 if (!data.disponible) throw new Error("Historial no disponible");
 
-                pintarBcv(data.bcv);
+                bcvLimite = BCV_INICIAL;
+                pintarBcv(data.bcv, bcvLimite);
                 pintarUsdt(data.usdt, data.hoy);
-                bcvLimite = 30;
-                document.getElementById('hist-ver-mas').hidden = data.bcv.length < bcvLimite;
+                document.getElementById('hist-ver-mas').hidden = data.bcv.length <= bcvLimite;
                 historialPintado = true;
             } catch (error) {
                 console.error(error);
