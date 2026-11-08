@@ -153,6 +153,57 @@
             font-weight: bold;
         }
 
+        /* --- BOTÓN DE COPIAR (al lado de la tasa y del resultado de la calculadora) --- */
+        .precio-fila, .copia-fila {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .copia-fila { margin-top: 4px; }
+        .copia-fila .calc-result { margin-top: 0; }
+        /* el botón (28px) es más alto que la línea del resultado: el margen negativo evita que la fila crezca */
+        .copia-fila .copy-btn { margin: -3px 0; }
+
+        .copy-btn {
+            background: #2c2c2c;
+            border: 1px solid #444;
+            color: #ccc;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            margin: 0;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+        }
+        .copy-btn svg { width: 15px; height: 15px; }
+        .copy-btn:hover { background: #3a3a3a; }
+        .copy-btn:disabled, .copy-btn:disabled:hover { background: #2c2c2c; opacity: 0.35; cursor: not-allowed; }
+        .copy-btn.copiado, .copy-btn.copiado:hover { color: #27ae60; border-color: #27ae60; }
+
+        .toast-copiado {
+            position: fixed;
+            left: 50%;
+            bottom: 24px;
+            transform: translate(-50%, 20px);
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s, transform 0.2s;
+            z-index: 200;
+        }
+        .toast-copiado.visible { opacity: 1; transform: translate(-50%, 0); }
+
         /* --- VARIACIÓN POR TARJETA --- */
         .cambio {
             display: block;
@@ -393,7 +444,10 @@
 
     <div class="card card-usd">
         <div class="card-title">BCV Dólar</div>
-        <div id="bcv-usd" class="price usd-color"><span class="skeleton"></span></div>
+        <div class="precio-fila">
+            <div id="bcv-usd" class="price usd-color"><span class="skeleton"></span></div>
+            <button class="copy-btn" id="copy-usd" onclick="copiarValor(this)" disabled title="Copiar la tasa" aria-label="Copiar la tasa del dólar"></button>
+        </div>
         <span id="cambio-usd" class="cambio"></span>
 
         <div class="calc-area">
@@ -402,13 +456,19 @@
                 <button class="swap-btn" onclick="invertir('usd')" title="Invertir conversión" aria-label="Invertir conversión">⇄</button>
             </div>
             <input type="number" class="calc-input" id="input-usd" placeholder="Monto $" oninput="calcular('usd', this.value)">
-            <span id="res-usd" class="calc-result">Bs. 0.00</span>
+            <div class="copia-fila">
+                <span id="res-usd" class="calc-result">Bs. 0.00</span>
+                <button class="copy-btn" id="copy-res-usd" onclick="copiarValor(this)" disabled title="Copiar el monto" aria-label="Copiar el monto calculado"></button>
+            </div>
         </div>
     </div>
 
     <div class="card card-eur">
         <div class="card-title">BCV Euro</div>
-        <div id="bcv-eur" class="price eur-color"><span class="skeleton"></span></div>
+        <div class="precio-fila">
+            <div id="bcv-eur" class="price eur-color"><span class="skeleton"></span></div>
+            <button class="copy-btn" id="copy-eur" onclick="copiarValor(this)" disabled title="Copiar la tasa" aria-label="Copiar la tasa del euro"></button>
+        </div>
         <span id="cambio-eur" class="cambio"></span>
 
         <div class="calc-area">
@@ -417,13 +477,19 @@
                 <button class="swap-btn" onclick="invertir('eur')" title="Invertir conversión" aria-label="Invertir conversión">⇄</button>
             </div>
             <input type="number" class="calc-input" id="input-eur" placeholder="Monto €" oninput="calcular('eur', this.value)">
-            <span id="res-eur" class="calc-result">Bs. 0.00</span>
+            <div class="copia-fila">
+                <span id="res-eur" class="calc-result">Bs. 0.00</span>
+                <button class="copy-btn" id="copy-res-eur" onclick="copiarValor(this)" disabled title="Copiar el monto" aria-label="Copiar el monto calculado"></button>
+            </div>
         </div>
     </div>
 
     <div class="card card-binance">
         <div class="card-title">Binance P2P (Promedio)</div>
-        <div id="binance" class="price usdt-color"><span class="skeleton"></span></div>
+        <div class="precio-fila">
+            <div id="binance" class="price usdt-color"><span class="skeleton"></span></div>
+            <button class="copy-btn" id="copy-binance" onclick="copiarValor(this)" disabled title="Copiar la tasa" aria-label="Copiar la tasa del USDT"></button>
+        </div>
         <span id="cambio-binance" class="cambio"></span>
 
         <div class="calc-area">
@@ -432,7 +498,10 @@
                 <button class="swap-btn" onclick="invertir('binance')" title="Invertir conversión" aria-label="Invertir conversión">⇄</button>
             </div>
             <input type="number" class="calc-input" id="input-binance" placeholder="Monto USDT" oninput="calcular('binance', this.value)">
-            <span id="res-binance" class="calc-result">Bs. 0.00</span>
+            <div class="copia-fila">
+                <span id="res-binance" class="calc-result">Bs. 0.00</span>
+                <button class="copy-btn" id="copy-res-binance" onclick="copiarValor(this)" disabled title="Copiar el monto" aria-label="Copiar el monto calculado"></button>
+            </div>
         </div>
     </div>
 
@@ -469,6 +538,8 @@
             </div>
         </div>
     </div>
+
+    <div id="toast-copiado" class="toast-copiado" role="status" aria-live="polite"></div>
 
     <div id="modal-info" class="modal-overlay" hidden onclick="cerrarInfoFuera(event)">
         <div class="modal-box">
@@ -525,6 +596,11 @@
                 tasasGlobales.usd = parseFloat(data.bcv.usd);
                 tasasGlobales.eur = parseFloat(data.bcv.eur);
                 tasasGlobales.binance = parseFloat(data.binance);
+
+                // Deja listo lo que copia el botón de cada tasa
+                asignarCopia('copy-usd', data.bcv.usd);
+                asignarCopia('copy-eur', data.bcv.eur);
+                asignarCopia('copy-binance', data.binance);
 
                 btn.disabled = false;
                 btn.innerText = "🔄 Actualizar";
@@ -583,12 +659,14 @@
             // Si la cantidad está vacía, mostramos 0
             if (!cantidad) {
                 resultado.innerText = prefijoVacio + "0.00";
+                asignarCopia('copy-res-' + moneda, null);
                 return;
             }
 
             let tasa = tasasGlobales[moneda]; // Buscamos la tasa en nuestra memoria global
             if (!tasa) {
                 resultado.innerText = "Esperando tasa...";
+                asignarCopia('copy-res-' + moneda, null);
                 return;
             }
 
@@ -599,6 +677,72 @@
             let totalBonito = total.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
             resultado.innerText = prefijoVacio + totalBonito;
+            asignarCopia('copy-res-' + moneda, total);
+        }
+
+        // --- BOTÓN DE COPIAR ---
+        const ICONO_COPIAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+        const ICONO_COPIADO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+
+        // Guarda en el botón el número a copiar, con coma decimal y sin separador de miles
+        // (así se pega directo en el banco o en un chat: 3000,00). Sin número válido, lo desactiva.
+        function asignarCopia(idBoton, valor) {
+            const btn = document.getElementById(idBoton);
+            const numero = Number(valor);
+            const hayValor = valor !== null && valor !== '' && Number.isFinite(numero) && numero > 0;
+            btn.dataset.valor = hayValor ? numero.toFixed(2).replace('.', ',') : '';
+            btn.disabled = !hayValor;
+        }
+
+        // Plan B para navegadores o contextos donde navigator.clipboard no está disponible
+        function copiarConRespaldo(texto) {
+            const area = document.createElement('textarea');
+            area.value = texto;
+            area.setAttribute('readonly', '');
+            area.style.position = 'fixed';
+            area.style.opacity = '0';
+            document.body.appendChild(area);
+            area.select();
+            let copiado = false;
+            try { copiado = document.execCommand('copy'); } catch (error) { copiado = false; }
+            area.remove();
+            return copiado;
+        }
+
+        let temporizadorAviso;
+        function mostrarAviso(mensaje) {
+            const aviso = document.getElementById('toast-copiado');
+            aviso.textContent = mensaje;
+            aviso.classList.add('visible');
+            clearTimeout(temporizadorAviso);
+            temporizadorAviso = setTimeout(() => aviso.classList.remove('visible'), 1600);
+        }
+
+        async function copiarValor(btn) {
+            const texto = btn.dataset.valor;
+            if (!texto) return;
+
+            let copiado = false;
+            try {
+                await navigator.clipboard.writeText(texto);
+                copiado = true;
+            } catch (error) {
+                copiado = copiarConRespaldo(texto);
+            }
+
+            if (!copiado) {
+                mostrarAviso('No se pudo copiar');
+                return;
+            }
+
+            mostrarAviso('Copiado: ' + texto);
+            btn.classList.add('copiado');
+            btn.innerHTML = ICONO_COPIADO;
+            clearTimeout(btn.temporizador);
+            btn.temporizador = setTimeout(() => {
+                btn.classList.remove('copiado');
+                btn.innerHTML = ICONO_COPIAR;
+            }, 1500);
         }
 
         // --- VARIACIÓN (sube/baja) ---
@@ -882,6 +1026,8 @@
                 }
             }
         }
+
+        document.querySelectorAll('.copy-btn').forEach(btn => { btn.innerHTML = ICONO_COPIAR; });
 
         obtenerDatos();
     </script>
