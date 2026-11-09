@@ -86,19 +86,30 @@ async function getBinanceRate() {
     }
 }
 
+// El BCV escribe los números con punto de miles y coma decimal: "1.001,18602288".
+// Si solo se cambia la coma por punto queda "1.001.18602288", que se lee como 1,001:
+// así falló el euro el día que pasó de 1.000 Bs. Hay que quitar los puntos de miles primero.
+function numeroDelBCV(texto) {
+    const limpio = String(texto).replace(/\s/g, '');
+    const normalizado = limpio.includes(',')
+        ? limpio.replace(/\./g, '').replace(',', '.') // "1.001,18" -> "1001.18"
+        : limpio;                                     // sin coma: ya trae el punto como decimal
+    return parseFloat(normalizado);
+}
+
 // --- FUNCIÓN 2: BCV (SCRAPING) ---
 async function getBCVRates() {
     try {
         const { data } = await axios.get('https://www.bcv.org.ve/', { httpsAgent: agent });
         const $ = cheerio.load(data);
 
-        // Extraemos el texto y cambiamos coma por punto
-        let usdText = $('#dolar strong').text().trim().replace(',', '.');
-        let eurText = $('#euro strong').text().trim().replace(',', '.');
+        // Extraemos el texto tal como lo muestra el BCV
+        let usdText = $('#dolar strong').text().trim();
+        let eurText = $('#euro strong').text().trim();
 
         // Convertimos a número y fijamos 2 decimales
-        let usdFinal = parseFloat(usdText).toFixed(2);
-        let eurFinal = parseFloat(eurText).toFixed(2);
+        let usdFinal = numeroDelBCV(usdText).toFixed(2);
+        let eurFinal = numeroDelBCV(eurText).toFixed(2);
 
         // "Fecha Valor": el día para el que rige esta tasa (el BCV la publica el día antes).
         // Es la fecha con la que se guarda en el historial.
