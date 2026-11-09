@@ -314,9 +314,12 @@ async function guardarUsdtEnRedis(fecha, hora, valor) {
 // Tasas pasadas del BCV (sacadas de los Excel que el BCV publica por trimestre, en
 // "Tipo de Cambio de Referencia SMC"), guardadas en bcv-historico.json: { "YYYY-MM-DD": { usd, eur } }
 // con la fecha valor y el precio de venta, igual que lo que muestra la página del BCV.
-// Se cargan en Redis una sola vez; HSETNX asegura que nunca pisen lo guardado en vivo.
+// Se cargan en Redis una sola vez por versión del archivo (la marca de abajo). Como vienen
+// de la fuente oficial, mandan sobre lo guardado en vivo: en la v2 esto reparó el euro del
+// 5 y 6/nov/2026, que se había guardado como 1 Bs cuando pasó de 1.000 (ver numeroDelBCV).
+// Si algún día se rehace el archivo, se sube el número de la marca para que se vuelva a cargar.
 const RUTA_HISTORICO_BCV = path.join(__dirname, 'bcv-historico.json');
-const MARCA_IMPORTACION_BCV = 'meta:bcv-historico:v1'; // si algún día se rehace el archivo, se sube el número
+const MARCA_IMPORTACION_BCV = 'meta:bcv-historico:v2';
 
 async function importarHistoricoBcv() {
     if (!redisActivo() || !fs.existsSync(RUTA_HISTORICO_BCV)) return;
@@ -329,7 +332,7 @@ async function importarHistoricoBcv() {
 
         for (let i = 0; i < fechas.length; i += 200) {
             const lote = fechas.slice(i, i + 200).map(f =>
-                ['HSETNX', 'bcv', f, JSON.stringify({ usd: datos[f].usd, eur: datos[f].eur })]
+                ['HSET', 'bcv', f, JSON.stringify({ usd: datos[f].usd, eur: datos[f].eur })]
             );
             await redisPipeline(lote);
         }
